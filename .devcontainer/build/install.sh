@@ -21,6 +21,12 @@ $HOME/.tfenv/bin/tfenv use latest
 curl -fsSL https://raw.githubusercontent.com/ritajhq/ensemble/main/.ensemble/install.sh | sh
 echo 'export PATH="$HOME/.ensemble/bin:$PATH"' >> ~/.zshrc
 
+# opa (Open Policy Agent CLI — compiles .rego policies, incl. to WASM, for judge-opa)
+mkdir -p ~/.local/bin
+curl -fsSL -o ~/.local/bin/opa https://openpolicyagent.org/downloads/v1.18.2/opa_linux_amd64_static
+chmod 755 ~/.local/bin/opa
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+
 # terraform-provider-dockercompose isn't published to the public registry —
 # `terraform init` can't resolve ritaj/dockercompose. The binary is baked
 # into the image (see Dockerfile) at ~/.terraform.d/plugin-bin; point
