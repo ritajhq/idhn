@@ -21,7 +21,7 @@ testable with fakes before the next phase's infra is chosen.
   `PolicyResult`, `Decision`, and the `Judge` orchestrator, constructor-injected
   with three ports: `PolicyRepository`, `PolicyEngine`, `DecisionStrategy`. No
   transport, no OPA, no I/O.
-- **`core/guard`** (next) — pure domain for the interception side. `Guard` is
+- **`core/guard`** (built) — pure domain for the interception side. `Guard` is
   **not generic over the raw request type** and never touches it directly — that
   knowledge is entirely encapsulated inside per-request-constructed collaborators.
   `Guard` is constructed with a `Judge` (used directly, per the earlier decision
@@ -63,7 +63,7 @@ testable with fakes before the next phase's infra is chosen.
 `Judge` orchestrator. Tested entirely against hand-written fakes. Lives at
 `source/core/judge/`.
 
-### Phase 2 — `core/guard` (next slice to build)
+### Phase 2 — `core/guard` (done)
 Pure domain for the interception side, no HTTP server yet. See the shape under
 "Architecture boundary" above: `ActionResolver` and `ServiceProvider` ports (both
 zero-argument, constructed per-request by the infra layer with whatever raw data
@@ -72,9 +72,9 @@ they need closed over), and a `Guard` orchestrator using `judge.Judge` directly.
 Tested with fakes for `ActionResolver` and `ServiceProvider`, and a real `Judge`
 wired with Phase 1's fake `PolicyRepository`/`PolicyEngine`/a stub
 `DecisionStrategy` (reusing test doubles already written for `core/judge`) — no
-real HTTP, no real OPA.
+real HTTP, no real OPA. Lives at `source/core/guard/`.
 
-### Phase 3 — OPA-backed `PolicyEngine` adapter
+### Phase 3 — OPA-backed `PolicyEngine` adapter (done)
 A concrete `PolicyEngine` implementation that embeds OPA, evaluated in-process
 via **OPA compiled to WASM** (`opa build -t wasm`), loaded through the official
 `@open-policy-agent/opa-wasm` npm package (confirmed to work under Deno via the
@@ -103,13 +103,21 @@ side effects — into what's designed to be a deterministic, replayable step.
 
 Lives outside `core` (e.g. `source/libs/judge-opa/`). Tested against real
 `.rego` fixtures, no network/webhook/deploy concerns yet — bundle loading here
-starts from a local file path; remote bundle fetching is Phase 6.
+starts from a local file path; remote bundle fetching is Phase 10.
 
-### Phase 4 — `PolicyRepository` adapter
-Resolves action → governing `Policy` references. Likely backed by metadata
-embedded in the same Rego bundle (e.g. package annotations or a manifest file
-shipped alongside the `.rego` sources) rather than a separate store — exact
-mechanism TBD when we get here, kept independent of Phase 3's engine choice.
+### Phase 4 — `PolicyRepository` adapter, wired to `judge-opa`
+Resolves action → governing `Policy` references. This phase must also settle
+the piece Phase 3 left open: `OpaPolicyEngine.load()` takes a
+`ReadonlyMap<Policy, Uint8Array>` of already-compiled bundles, but nothing yet
+says where those bytes come from at runtime, or how `PolicyRepository` and the
+engine agree on the same set of policy ids. Needs a decided-on-arrival
+convention — most likely a directory of `.wasm` files (one per policy,
+filename or a small index file mapping id → path) that both adapters are
+built from at startup. Likely backed by metadata embedded in the same Rego
+bundle (e.g. package annotations) or a sibling manifest file shipped alongside
+the `.rego`/`.wasm` — exact mechanism TBD when we get here, kept independent
+of Phase 3's engine choice, but must produce a `Policy` set that's a subset of
+what's loaded into `OpaPolicyEngine`.
 
 ### Phase 4a — manifest-driven `ActionResolver` adapter
 A concrete, declarative `ActionResolver` implementation living outside `core`.
@@ -124,19 +132,70 @@ manifest schema, the enrichment-fetch mechanism, caching, and failure handling
 (what happens if an external source is unreachable) are all open design
 questions to resolve when we start this phase — not yet decided.
 
-### Phase 5 — HTTP transport
-Two adapters, both thin:
-- Wrap `Guard` behind an actual HTTP server (the reverse-proxy/interceptor
-  process) — implements `RequestDescriptor` construction from a real framework's
-  request object, and turns `Outcome` into either a proxied call to the
-  protected service or a `403` response.
-- If/when Judge needs to run as a separate deployable, an HTTP-calling
-  `PolicyRepository`/`PolicyEngine` pair (or a single client wrapping both) that
-  a remote Guard process could use instead of the Phase 3/4 in-process adapters —
-  no change to `core/judge` or `core/guard` required, per the architecture
-  boundary above.
+### Phase 4b — multi-policy integration test
+Before trusting `DenyOverridesStrategy` in production, run it against *real*
+compiled OPA policies rather than synthetic `Verdict` values from a fake
+engine. Compile two or more genuine `.rego` fixtures (extending the pattern
+already used in `judge-opa`'s tests) representing a realistic multi-policy
+scenario for one action (e.g. a base policy + an override), and exercise the
+full `Judge` (real `PolicyRepository` + real `OpaPolicyEngine` +
+`DenyOverridesStrategy`) end-to-end. Closes the gap between "combination logic
+is unit-tested" and "combination logic is proven correct against actual Rego
+semantics."
 
-### Phase 6 — Bundle delivery pipeline
+### Phase 5 — composition root / process wiring
+Nothing so far actually runs as a process — every phase to this point is a
+library package. This phase is where concrete adapters get instantiated and
+wired together: `new Judge(policyRepository, policyEngine, decisionStrategy)`,
+`new Guard(judge, actionResolver, serviceProvider)`, built from real
+configuration (env vars vs a config file — undecided) and started as a running
+service. Belongs in `source/apps/` per the existing workspace layout. Also the
+place to decide process-level concerns: how the manifest (Phase 4a) and OPA
+bundle (Phase 3/4) are located/loaded at startup, and what happens if either
+is missing or invalid at boot (fail-fast is the likely default, to be
+confirmed here).
+
+### Phase 6 — HTTP transport
+Two adapters, both thin, built on top of Phase 5's composition root:
+- A concrete `ActionResolver` + `ServiceProvider` pair backed by a real HTTP
+  framework/request object — `ActionResolver` reads the manifest (Phase 4a) to
+  identify the action and pull context, `ServiceProvider` proxies the request
+  to the protected service or writes a `403`.
+- If/when Judge needs to run as a separate deployable from Guard, an
+  HTTP-calling `PolicyRepository`/`PolicyEngine` pair (or a single client
+  wrapping both) that a remote Guard process could use instead of the Phase
+  3/4 in-process adapters — no change to `core/judge` or `core/guard`
+  required, per the architecture boundary above.
+
+### Phase 7 — error handling & failure modes
+Not yet addressed anywhere: `Guard.execute()` currently has no failure
+handling — if `ActionResolver.resolve()`, `PolicyRepository.findPoliciesFor()`,
+`PolicyEngine.evaluate()`, or `DecisionStrategy.combine()` throws/rejects, the
+error propagates out of `Guard.execute()` uncaught. Needs a decision: does
+`Guard` catch internal errors and treat them as an implicit reject (fail
+closed, consistent with the existing unmatched-action behavior), or is
+catching left entirely to the composition root (Phase 5) / HTTP layer (Phase
+6)? Whichever is chosen must be applied consistently and covered by tests
+before this is production-ready — right now it's an unhandled gap, not a
+made decision.
+
+### Phase 8 — observability & audit
+`Decision` already carries the `PolicyResult[]` that produced it, specifically
+for explainability — but nothing yet says where that goes. For an
+authorization system this is usually load-bearing (audit trails, incident
+investigation, debugging a wrongly-denied request), not optional polish.
+Likely shape: an `AuditSink`-style port `Guard` or `Judge` can be given,
+called with the `Decision` after every evaluation, implemented outside `core`
+(structured logs, an event stream, etc.) — exact interface TBD when we get
+here.
+
+### Phase 9 — CI
+`deno test`, `deno lint`, `deno fmt --check` running on every push/PR, scoped
+per-workspace-package. No decisions made yet on CI provider/config. Matters
+before Phase 10's auto-deploy exists, and before more than one contributor is
+working in the repo.
+
+### Phase 10 — bundle delivery pipeline
 GitHub webhook → build OPA bundle from the policies repo → redeploy the Judge
 process with the new bundle embedded. Pure ops/CI concern, last on purpose:
 nothing about `core` design depends on how the bundle physically arrives.
@@ -145,5 +204,5 @@ nothing about `core` design depends on how the bundle physically arrives.
 Each phase adds its own fakes/fixtures and a test suite runnable via `deno test`,
 independent of later phases' infra. No phase's tests should require network
 access, a real OPA binary, or a real HTTP server until Phase 3+ (real OPA) and
-Phase 5 (real HTTP) respectively — and even then, scoped to that phase's own
+Phase 6 (real HTTP) respectively — and even then, scoped to that phase's own
 adapter package, not `core`.
