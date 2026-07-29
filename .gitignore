@@ -1,0 +1,6 @@
+.ensemble/bin/
+.ensemble/repository/
+.ensemble/kits/**/.bin/
+.ensemble/tokens.json
+source/artifacts/
+node_modules/

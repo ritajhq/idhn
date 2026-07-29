@@ -1,0 +1,7 @@
+{
+  "workspace": [
+    "source/apps/**",
+    "source/libs/**",
+    ".ensemble/kits/**"
+  ]
+}
