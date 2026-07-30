@@ -1,9 +1,7 @@
 export interface Config {
   manifestPath: string
-  judgeServerUrl: URL
-  upstreamUrl: URL
+  bundlePath: string
   port: number
-  rejectResponseUrl: URL | undefined
 }
 
 /** The slice of `Deno.Env` `loadConfig` actually needs, so tests can supply a lightweight fake. */
@@ -13,16 +11,14 @@ export interface EnvReader {
 
 export class ConfigError extends Error {}
 
-const DEFAULT_PORT = 8080
+const DEFAULT_PORT = 8081
 
 /** Reads and validates the server's configuration from environment variables. Throws `ConfigError` on any missing or invalid value. */
 export function loadConfig(env: EnvReader = Deno.env): Config {
   return {
     manifestPath: requireEnv(env, 'SERVICE_MANIFEST_PATH'),
-    judgeServerUrl: requireUrl(env, 'JUDGE_SERVER_URL'),
-    upstreamUrl: requireUrl(env, 'UPSTREAM_URL'),
-    port: readPort(env, 'PROXY_PORT'),
-    rejectResponseUrl: readOptionalUrl(env, 'REJECT_RESPONSE_URL'),
+    bundlePath: requireEnv(env, 'POLICY_BUNDLE_PATH'),
+    port: readPort(env, 'JUDGE_PORT'),
   }
 }
 
@@ -32,27 +28,6 @@ function requireEnv(env: EnvReader, name: string): string {
     throw new ConfigError(`${name} must be set`)
   }
   return value
-}
-
-function requireUrl(env: EnvReader, name: string): URL {
-  const value = requireEnv(env, name)
-  return parseUrl(value, name)
-}
-
-function readOptionalUrl(env: EnvReader, name: string): URL | undefined {
-  const value = env.get(name)
-  if (value === undefined || value.length === 0) {
-    return undefined
-  }
-  return parseUrl(value, name)
-}
-
-function parseUrl(value: string, name: string): URL {
-  try {
-    return new URL(value)
-  } catch {
-    throw new ConfigError(`${name} must be a valid URL, got "${value}"`)
-  }
 }
 
 function readPort(env: EnvReader, name: string): number {

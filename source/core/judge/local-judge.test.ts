@@ -4,7 +4,7 @@ import { Context } from './context.ts'
 import { Decision } from './decision.ts'
 import type { DecisionStrategy } from './decision-strategy.ts'
 import { DenyOverridesStrategy } from './deny-overrides-strategy.ts'
-import { Judge } from './judge.ts'
+import { LocalJudge } from './local-judge.ts'
 import type { PolicyEngine } from './policy-engine.ts'
 import { Policy } from './policy.ts'
 import { PolicyResult } from './policy-result.ts'
@@ -39,7 +39,7 @@ class StubDecisionStrategy implements DecisionStrategy {
 const action = new Action('invoice.approve')
 const context = new Context({ subject: 'alice' })
 
-Deno.test("Judge.decide: resolves policies, evaluates each, and returns the strategy's combined decision", async () => {
+Deno.test("LocalJudge.decide: resolves policies, evaluates each, and returns the strategy's combined decision", async () => {
   const policyA = new Policy('policy.a')
   const policyB = new Policy('policy.b')
   const repository = new FakePolicyRepository([policyA, policyB])
@@ -51,7 +51,7 @@ Deno.test("Judge.decide: resolves policies, evaluates each, and returns the stra
   )
   const strategy = new DenyOverridesStrategy(new Decision(false))
 
-  const judge = new Judge(repository, engine, strategy)
+  const judge = new LocalJudge(repository, engine, strategy)
   const decision = await judge.decide(action, context)
 
   assertEquals(decision.allowed, true)
@@ -60,26 +60,26 @@ Deno.test("Judge.decide: resolves policies, evaluates each, and returns the stra
   assertEquals(decision.results[1].verdict, Verdict.Neutral)
 })
 
-Deno.test('Judge.decide: passes an empty result set to the strategy when no policies govern the action', async () => {
+Deno.test('LocalJudge.decide: passes an empty result set to the strategy when no policies govern the action', async () => {
   const repository = new FakePolicyRepository([])
   const engine = new FakePolicyEngine(new Map())
   const fallback = new Decision(false)
   const strategy = new StubDecisionStrategy(fallback)
 
-  const judge = new Judge(repository, engine, strategy)
+  const judge = new LocalJudge(repository, engine, strategy)
   const decision = await judge.decide(action, context)
 
   assertEquals(decision, fallback)
 })
 
-Deno.test('Judge.decide: delegates entirely to the injected strategy, never deciding allow/deny itself', async () => {
+Deno.test('LocalJudge.decide: delegates entirely to the injected strategy, never deciding allow/deny itself', async () => {
   const policy = new Policy('policy.always-allow')
   const repository = new FakePolicyRepository([policy])
   const engine = new FakePolicyEngine(new Map([[policy.id, Verdict.Allow]]))
   const forcedDeny = new Decision(false)
   const strategy = new StubDecisionStrategy(forcedDeny)
 
-  const judge = new Judge(repository, engine, strategy)
+  const judge = new LocalJudge(repository, engine, strategy)
   const decision = await judge.decide(action, context)
 
   assertEquals(decision, forcedDeny)

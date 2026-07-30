@@ -1,17 +1,26 @@
 # Manual end-to-end demo
 
-Run the fake protected service and the guard proxy together, then browse
-through the proxy to see it work.
+Run the fake protected service, the judge server, and the guard proxy
+together, then browse through the proxy to see it work. The judge server is
+never exposed publicly — only the guard proxy talks to it.
 
 ```sh
 # terminal 1 — the "protected" service
 cd source/apps/guard/fake-service
 PORT=9100 deno task start
 
-# terminal 2 — the proxy, pointed at this demo's manifest/policy/403 page
+# terminal 2 — the judge server, holding the manifest/policy bundle
+cd source/apps/judge/server
+SERVICE_MANIFEST_PATH=../../guard/demo/manifest.yaml \
+POLICY_BUNDLE_PATH=../../guard/demo/policy.wasm \
+JUDGE_PORT=9300 \
+deno task start
+
+# terminal 3 — the proxy, pointed at the judge server, this demo's
+# manifest (for action resolution), and its 403 page
 cd source/apps/guard/proxy
 SERVICE_MANIFEST_PATH=../demo/manifest.yaml \
-POLICY_BUNDLE_PATH=../demo/policy.wasm \
+JUDGE_SERVER_URL=http://localhost:9300 \
 UPSTREAM_URL=http://localhost:9100 \
 REJECT_RESPONSE_URL=file://$(pwd)/../demo/forbidden.html \
 PROXY_PORT=9200 \

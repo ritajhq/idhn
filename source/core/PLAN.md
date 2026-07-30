@@ -26,15 +26,20 @@ no authorization-domain vocabulary at all (nothing lives there yet).
 ## Architecture boundary (decided)
 
 - **`core/judge`** (built) — pure domain: `Action`, `Context`, `Policy`, `Verdict`,
-  `PolicyResult`, `Decision`, and the `Judge` orchestrator, constructor-injected
-  with three ports: `PolicyRepository`, `PolicyEngine`, `DecisionStrategy`. No
-  transport, no OPA, no I/O.
+  `PolicyResult`, `Decision`, and `Judge` — now a **port** (an interface,
+  `decide(action, context): Promise<Decision>`), not a concrete class. `LocalJudge`
+  is the in-process implementation: an orchestrator constructor-injected with
+  three ports (`PolicyRepository`, `PolicyEngine`, `DecisionStrategy`). No
+  transport, no OPA, no I/O. `core/judge/http/` holds the transport
+  implementations of the `Judge` port itself — `JudgeHttpClient` (implements
+  `Judge`, calls a remote judge-server) and `buildJudgeHandler` (exposes any
+  `Judge` over HTTP) — see Phase 5b.
 - **`core/guard`** (built) — pure domain for the interception side. `Guard` is
   **not generic over the raw request type** and never touches it directly — that
   knowledge is entirely encapsulated inside per-request-constructed collaborators.
-  `Guard` is constructed with a `Judge` (used directly, per the earlier decision
-  to prefer less indirection since the in-process→HTTP seam already lives inside
-  `Judge`'s own injected ports) plus two ports:
+  `Guard` is constructed with a `Judge` (the interface, not a concrete class —
+  since Phase 5b this is what makes running `Judge` in its own process possible
+  without any change to `Guard` itself) plus two ports:
   - **`ActionResolver`** — `resolve(): Promise<{ action: Action; context: Context }
     | null>`. No arguments; a concrete implementation is constructed per-request
     with whatever raw data it needs closed over (e.g. the actual HTTP request).
@@ -363,6 +368,78 @@ otherwise.
   `content-type: text/html; charset=utf-8`) work as designed, plus the
   bare-403 fallback when `REJECT_RESPONSE_URL` is unset.
 
+### Phase 5b — split Judge into its own (non-public) process (done)
+Until now `guard-proxy` — the process directly exposed to public traffic —
+also held the `Judge` in-process, along with the OPA bundle and policy
+registry. Since `Judge` is the actual authorization decision-maker, it
+shouldn't share a process/attack-surface with the public HTTP gateway. Split
+into two processes: `source/apps/judge/server/` (new, holds `Judge` +
+`InMemoryPolicyRegistry` + `OpaPolicyEngine`, never exposed publicly) and
+`source/apps/guard/proxy/` (unchanged responsibility, now talks to
+judge-server over HTTP instead of holding a `Judge` locally).
+
+**`source/core/judge/judge.ts`** — what used to be the `Judge` class is now
+an interface: `{ decide(action, context): Promise<Decision> }`. The old
+implementation is renamed `LocalJudge` (`local-judge.ts`), unchanged
+otherwise. This is the same shape `PolicyEngine`/`PolicyRepository` already
+have — `Judge` was the one collaborator in the whole design that was a
+concrete class instead of a port, which is exactly what made an
+in-process-only assumption invisible until now.
+
+**`source/core/judge/http/`** — the transport adapters, kept in `core/judge`
+(not a separate app-level package) since they still speak in `Judge`'s
+vocabulary and contain no process-wiring:
+- `wire.ts` — the wire contract, `{ action: string, context: object }` →
+  `{ allowed: boolean }`. `Decision.results` (the explainability trail) is
+  deliberately dropped on the wire — nothing downstream of `Guard` reads it
+  (confirmed by grep before this decision), and the caller only ever needs
+  `.allowed`. If audit/explainability (Phase 8) later needs `results` to
+  cross the process boundary, the wire contract grows then, not
+  speculatively now.
+- `build-judge-handler.ts` — `buildJudgeHandler(judge: Judge)` wraps any
+  `Judge` (so it works identically whether judge-server injects a
+  `LocalJudge` or, hypothetically, something else) as `POST /decide`;
+  anything else 404s; malformed body or missing `action`/`context` is 400.
+- `judge-http-client.ts` — `JudgeHttpClient implements Judge`, the client
+  side: POSTs `{action: action.name, context: {...context.facts}}` to
+  `${server}/decide`, decodes `{allowed}` back into a `Decision`. A non-ok
+  response throws `JudgeRequestError` — deliberately *not* swallowed into an
+  implicit deny here; whether judge-server unreachability should fail closed
+  is a `Guard`-level concern, i.e. Phase 7, not something to silently decide
+  inside the client.
+
+**`source/apps/judge/server/`** — mirrors `guard-proxy`'s shape exactly
+(`config.ts`, `build-server.ts`, `main.ts`, own `deno.json` with its own
+`fmt` block). `config.ts` reads `SERVICE_MANIFEST_PATH`, `POLICY_BUNDLE_PATH`
+(both required) and `JUDGE_PORT` (optional, defaults `8081`) — no
+`UPSTREAM_URL`/`REJECT_RESPONSE_URL`, since those are guard-proxy-only
+concerns. `build-server.ts` does exactly what `guard-proxy`'s used to before
+this split: loads the manifest and OPA bundle, populates an
+`InMemoryPolicyRegistry` under the same 1:1 stub convention (see Phase 4c —
+still the real gap to close), builds a `LocalJudge`, and returns
+`buildJudgeHandler(judge)` as the request handler. `guard-proxy` no longer
+has any of this — it only loads the manifest (for
+`HttpManifestActionResolver`) and constructs a `JudgeHttpClient`.
+
+**`source/apps/guard/proxy/`** — `config.ts` drops `bundlePath`, adds
+`judgeServerUrl` (required `JUDGE_SERVER_URL`, e.g.
+`http://judge.internal:8081`). `build-server.ts` no longer touches OPA or a
+policy registry at all — it loads the manifest (still needed for
+`HttpManifestActionResolver`, which is a guard-side concern: recognizing
+*which* action an HTTP request is attempting is orthogonal to judging it) and
+constructs one `new JudgeHttpClient(config.judgeServerUrl)`, injected into
+`Guard` exactly where `LocalJudge` used to go — `Guard`'s constructor didn't
+change at all, since it always depended on the `Judge` interface, not a
+concrete class.
+
+Verified end-to-end manually with all three real processes running
+(`fake-service` :9100, `judge-server` :9300, `guard-proxy` :9200): a direct
+`POST /decide` against judge-server for both an allowed and denied context;
+then through the proxy, confirmed the same allow/deny outcomes end-to-end
+(custom 403 page on deny, real reverse-proxy to `fake-service` on allow) —
+proving `guard-proxy` no longer decides anything itself, only orchestrates
+and forwards. Full workspace suite: 103 passed, 0 failed.
+
 ### Phase 7 — error handling & failure modes
 Still not addressed: `Guard.execute()` has no failure handling — if
 `ActionResolver.resolve()`, `PolicyRepository.findPoliciesFor()`,
@@ -376,6 +453,15 @@ the existing unmatched-action behavior), or is catching left entirely to the
 composition root / HTTP layer (both now built in Phase 5, at
 `source/apps/guard/proxy/`)? Whichever is chosen must be applied consistently
 and covered by tests before this is production-ready.
+
+Phase 5b widened this: `JudgeHttpClient.decide()` now also throws
+`JudgeRequestError` on any non-ok response from judge-server, and a genuine
+network failure (judge-server down, unreachable) throws too — both currently
+propagate out of `Guard.execute()` exactly like every other untreated
+failure mode above. Whatever failure-handling strategy this phase lands on
+must explicitly cover "judge-server is unreachable," since that's now a
+distinct, expected-in-production failure mode (deploys, restarts, network
+partitions between the two processes) rather than a hypothetical.
 
 ### Phase 8 — observability & audit
 `Decision` already carries the `PolicyResult[]` that produced it, specifically

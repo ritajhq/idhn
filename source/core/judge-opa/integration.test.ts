@@ -5,7 +5,8 @@ import {
   Decision,
   DenyOverridesStrategy,
   InMemoryPolicyRegistry,
-  Judge,
+  type Judge,
+  LocalJudge,
   Policy,
   Verdict,
 } from '@mithaq/judge'
@@ -29,7 +30,7 @@ async function buildJudge(): Promise<Judge> {
   await registry.associate(action, new Policy('invoice.approve.base'))
   await registry.associate(action, new Policy('invoice.approve.fraud_override'))
 
-  return new Judge(
+  return new LocalJudge(
     registry,
     engine,
     new DenyOverridesStrategy(new Decision(false)),
@@ -78,7 +79,7 @@ Deno.test('Judge + OpaPolicyEngine + InMemoryPolicyRegistry: denies when no poli
   const wasmBytes = await Deno.readFile(bundlePath)
   const engine = await OpaPolicyEngine.load(wasmBytes)
   const registry = new InMemoryPolicyRegistry()
-  const judge = new Judge(
+  const judge = new LocalJudge(
     registry,
     engine,
     new DenyOverridesStrategy(new Decision(false)),

@@ -94,6 +94,11 @@
           "jsr:@std/assert@1.0.14"
         ]
       },
+      "source/apps/judge/server": {
+        "dependencies": [
+          "jsr:@std/assert@1.0.14"
+        ]
+      },
       "source/core/guard": {
         "dependencies": [
           "jsr:@std/assert@1.0.14",

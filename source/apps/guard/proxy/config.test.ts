@@ -7,7 +7,7 @@ function fakeEnv(values: Record<string, string>): EnvReader {
 
 const validEnv = {
   SERVICE_MANIFEST_PATH: '/etc/guard/manifest.yaml',
-  POLICY_BUNDLE_PATH: '/etc/guard/policy.wasm',
+  JUDGE_SERVER_URL: 'http://judge.internal:8081',
   UPSTREAM_URL: 'http://upstream.internal:8000',
 }
 
@@ -15,7 +15,10 @@ Deno.test('loadConfig: reads all required values', () => {
   const config = loadConfig(fakeEnv(validEnv))
 
   assertEquals(config.manifestPath, '/etc/guard/manifest.yaml')
-  assertEquals(config.bundlePath, '/etc/guard/policy.wasm')
+  assertEquals(
+    config.judgeServerUrl,
+    new URL('http://judge.internal:8081'),
+  )
   assertEquals(config.upstreamUrl, new URL('http://upstream.internal:8000'))
 })
 
@@ -69,12 +72,20 @@ Deno.test('loadConfig: throws when SERVICE_MANIFEST_PATH is missing', () => {
   )
 })
 
-Deno.test('loadConfig: throws when POLICY_BUNDLE_PATH is missing', () => {
-  const { POLICY_BUNDLE_PATH: _omit, ...rest } = validEnv
+Deno.test('loadConfig: throws when JUDGE_SERVER_URL is missing', () => {
+  const { JUDGE_SERVER_URL: _omit, ...rest } = validEnv
   assertThrows(
     () => loadConfig(fakeEnv(rest)),
     ConfigError,
-    'POLICY_BUNDLE_PATH',
+    'JUDGE_SERVER_URL',
+  )
+})
+
+Deno.test('loadConfig: throws when JUDGE_SERVER_URL is not a valid URL', () => {
+  assertThrows(
+    () => loadConfig(fakeEnv({ ...validEnv, JUDGE_SERVER_URL: 'not a url' })),
+    ConfigError,
+    'JUDGE_SERVER_URL',
   )
 })
 

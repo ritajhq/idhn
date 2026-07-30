@@ -4,7 +4,8 @@ import {
   Context,
   Decision,
   DenyOverridesStrategy,
-  Judge,
+  type Judge,
+  LocalJudge,
   Policy,
   type PolicyEngine,
   type PolicyRepository,
@@ -61,7 +62,7 @@ function judgeAlwaysReturning(
 ): { judge: Judge; repository: FakePolicyRepository } {
   const policy = new Policy('policy.a')
   const repository = new FakePolicyRepository([policy])
-  const judge = new Judge(
+  const judge = new LocalJudge(
     repository,
     new FakePolicyEngine(verdict),
     new DenyOverridesStrategy(new Decision(false)),
