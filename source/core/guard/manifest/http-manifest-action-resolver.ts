@@ -5,13 +5,14 @@ import { matchRequest } from './match-request.ts'
 import type { Manifest } from './schema.ts'
 
 /**
- * An `ActionResolver` driven entirely by a declarative `Manifest`: tries
- * each of the manifest's actions in order against the request, and resolves
- * to the first whole match (method + path + header criteria, and every
- * non-optional `extract` entry present). Constructed per-request with the
- * `Manifest` (shared across requests) and the one `Request` it's judging.
+ * An `ActionResolver` driven entirely by a declarative `Manifest`, matched
+ * against a web-standard `Request`: tries each of the manifest's actions in
+ * order, and resolves to the first whole match (method + path + header
+ * criteria, and every non-optional `extract` entry present). Constructed
+ * per-request with the `Manifest` (shared across requests) and the one
+ * `Request` it's judging.
  */
-export class ManifestActionResolver implements ActionResolver {
+export class HttpManifestActionResolver implements ActionResolver {
   constructor(
     private readonly manifest: Manifest,
     private readonly request: Request,

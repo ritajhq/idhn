@@ -1,4 +1,4 @@
-id: billing-service
+id: billing_service
 
 actions:
   - name: invoice.approve

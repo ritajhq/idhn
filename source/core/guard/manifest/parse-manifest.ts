@@ -11,6 +11,14 @@ import type {
 
 export class ManifestParseError extends Error {}
 
+/**
+ * `id` and action `name`s are joined with `.` and become Rego package/
+ * entrypoint path segments (see `judge-opa`'s `OpaPolicyEngine`), and Rego
+ * identifiers may only contain letters, digits, and underscores, and can't
+ * start with a digit — so composite names must use `_`, not `-`.
+ */
+const REGO_SAFE_IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/
+
 const BODY_TYPES: readonly BodyType[] = ['json', 'form', 'text']
 const FROM_PROPERTIES: readonly FromProperty[] = [
   'path',
@@ -23,7 +31,7 @@ const FROM_PROPERTIES: readonly FromProperty[] = [
 /** Parses and validates a raw (already YAML/JSON-decoded) value as a `Manifest`. Throws `ManifestParseError` on any structural problem. */
 export function parseManifest(raw: unknown): Manifest {
   const root = expectObject(raw, 'manifest')
-  const id = expectString(root.id, 'manifest.id')
+  const id = expectRegoSafeIdentifier(root.id, 'manifest.id')
   const actions = expectArray(root.actions, 'manifest.actions').map((
     action,
     index,
@@ -33,7 +41,7 @@ export function parseManifest(raw: unknown): Manifest {
 
 function parseAction(raw: unknown, path: string): ManifestAction {
   const obj = expectObject(raw, path)
-  const name = expectString(obj.name, `${path}.name`)
+  const name = expectRegoSafeActionName(obj.name, `${path}.name`)
   const match = parseMatch(obj.match, `${path}.match`)
   const extract = obj.extract === undefined
     ? undefined
@@ -145,6 +153,29 @@ function expectString(raw: unknown, path: string): string {
     throw new ManifestParseError(`${path} must be a non-empty string`)
   }
   return raw
+}
+
+function expectRegoSafeIdentifier(raw: unknown, path: string): string {
+  const value = expectString(raw, path)
+  if (!REGO_SAFE_IDENTIFIER.test(value)) {
+    throw new ManifestParseError(
+      `${path} must contain only letters, digits, and underscores, and must not start with a digit (got "${value}") — composite names must use "_", not "-", since this value becomes a Rego package path segment`,
+    )
+  }
+  return value
+}
+
+function expectRegoSafeActionName(raw: unknown, path: string): string {
+  const value = expectString(raw, path)
+  const invalidSegment = value.split('.').find((segment) =>
+    !REGO_SAFE_IDENTIFIER.test(segment)
+  )
+  if (invalidSegment !== undefined) {
+    throw new ManifestParseError(
+      `${path} segment "${invalidSegment}" must contain only letters, digits, and underscores, and must not start with a digit — composite names must use "_", not "-", since this value becomes a Rego package path segment`,
+    )
+  }
+  return value
 }
 
 function expectBoolean(raw: unknown, path: string): boolean {

@@ -2,7 +2,7 @@ import { assertEquals, assertThrows } from '@std/assert'
 import { ManifestParseError, parseManifest } from './parse-manifest.ts'
 
 const validRaw = {
-  id: 'billing-service',
+  id: 'billing_service',
   actions: [
     {
       name: 'invoice.approve',
@@ -42,7 +42,7 @@ const validRaw = {
 Deno.test('parseManifest: parses a fully-populated manifest', () => {
   const manifest = parseManifest(validRaw)
 
-  assertEquals(manifest.id, 'billing-service')
+  assertEquals(manifest.id, 'billing_service')
   assertEquals(manifest.actions.length, 2)
   assertEquals(manifest.actions[0].name, 'invoice.approve')
   assertEquals(manifest.actions[0].extract?.length, 5)
@@ -164,5 +164,40 @@ Deno.test('parseManifest: rejects an extract entry with no "as"', () => {
       }),
     ManifestParseError,
     '.as',
+  )
+})
+
+Deno.test('parseManifest: rejects a hyphenated id (invalid Rego package segment)', () => {
+  assertThrows(
+    () => parseManifest({ id: 'billing-service', actions: [] }),
+    ManifestParseError,
+    'manifest.id',
+  )
+})
+
+Deno.test('parseManifest: rejects an id starting with a digit', () => {
+  assertThrows(
+    () => parseManifest({ id: '1service', actions: [] }),
+    ManifestParseError,
+    'manifest.id',
+  )
+})
+
+Deno.test('parseManifest: accepts an underscore-separated id', () => {
+  const manifest = parseManifest({ id: 'billing_service', actions: [] })
+  assertEquals(manifest.id, 'billing_service')
+})
+
+Deno.test('parseManifest: rejects an action name with a hyphenated segment', () => {
+  assertThrows(
+    () =>
+      parseManifest({
+        id: 'x',
+        actions: [
+          { name: 'invoice.fraud-check', match: { method: 'GET', path: '/a' } },
+        ],
+      }),
+    ManifestParseError,
+    'fraud-check',
   )
 })

@@ -216,8 +216,9 @@ inventing from scratch:
   manifest authors to write the prefix themselves.
 
 Built against the web-standard `Request`/`URL`/`Headers` (native in Deno),
-not a bespoke request type — so a real Phase 6 HTTP server needs no adapter
-code to hand `ManifestActionResolver` what it needs.
+not a bespoke request type — so the real HTTP server built in Phase 5 needed
+no adapter code to hand `HttpManifestActionResolver` what it needs (renamed
+from `ManifestActionResolver` there, once it stopped being hypothetical).
 
 Deliberately deferred: **external data enrichment** (e.g. "fetch
 `requester.points` from a points service" as declarative config, replacing
@@ -243,41 +244,103 @@ no-policies-registered cases. `judge-opa`'s fixture `build.sh` was extended
 with the two new entrypoints; the shared `policy.wasm` bundle now contains
 four entrypoints total.
 
-### Phase 5 — composition root / process wiring
-Nothing so far actually runs as a process — every phase to this point is a
-library package. This phase is where concrete adapters get instantiated and
-wired together: `new Judge(policyRepository, policyEngine, decisionStrategy)`,
-`new Guard(judge, actionResolver, serviceProvider)`, built from real
-configuration (env vars vs a config file — undecided) and started as a running
-service. Belongs in `source/apps/` per the existing workspace layout. Also the
-place to decide process-level concerns: how the manifest (Phase 4a) and OPA
-bundle (Phase 3/4) are located/loaded at startup, and what happens if either
-is missing or invalid at boot (fail-fast is the likely default, to be
-confirmed here).
+### Phase 4c — pluggable, cached `PolicyRepository` (new, not yet started)
+The real answer to "which policies govern which actions." Phase 5 (below)
+needed something working today and stubbed it with `InMemoryPolicyRegistry`
+under a 1:1 action-name-equals-policy-id convention — not the real design.
+The actual association is meant to be a genuinely live, runtime-queryable
+lookup, written by some other system/process (a KV store, a YAML file, a
+separate service — unspecified/pluggable), that can change without a
+redeploy but not so often that a cache in front of it is unwarranted. Needs
+its own port design plus a caching layer, with the exact backing store,
+cache invalidation strategy, and how the write side is exposed all still
+open — deliberately deferred rather than designed ad hoc inside Phase 5.
 
-### Phase 6 — HTTP transport
-Two adapters, both thin, built on top of Phase 5's composition root:
-- A concrete `ActionResolver` + `ServiceProvider` pair backed by a real HTTP
-  framework/request object — `ActionResolver` reads the manifest (Phase 4a) to
-  identify the action and pull context, `ServiceProvider` proxies the request
-  to the protected service or writes a `403`.
-- If/when Judge needs to run as a separate deployable from Guard, an
-  HTTP-calling `PolicyRepository`/`PolicyEngine` pair (or a single client
-  wrapping both) that a remote Guard process could use instead of the Phase
-  3/4 in-process adapters — no change to `core/judge` or `core/guard`
-  required, per the architecture boundary above.
+### Phase 5 — composition root / process wiring, merged with Phase 6 — HTTP transport (done)
+The plan originally split "wiring" from "HTTP transport" into separate
+phases, but `ServiceProvider.forward()` only means something with a real
+transport — so they were merged into one runnable slice: `source/apps/guard/proxy/`,
+a real Deno HTTP server (`main.ts`, `deno task start`).
+
+**`config.ts`** — reads `SERVICE_MANIFEST_PATH`, `POLICY_BUNDLE_PATH`,
+`UPSTREAM_URL` (all required, fail-fast `ConfigError` if missing/invalid),
+`PROXY_PORT` (optional, defaults to `8080`). Takes an injectable `EnvReader`
+(the minimal `{ get(name): string | undefined }` slice of `Deno.Env`) so
+tests don't need real env vars or `Deno.env` permission.
+
+**`build-server.ts`** — the actual composition root, run once at startup:
+loads the manifest (`loadManifestFile`) and OPA bundle
+(`Deno.readFile` + `OpaPolicyEngine.load`), builds one shared `Judge`, and
+returns a per-request handler. Per request, builds fresh
+`HttpManifestActionResolver`/`HttpServiceProvider` instances (closed over
+that request) and a fresh `Guard`, then `await guard.execute()`.
+
+**`source/core/guard/http/http-service-provider.ts`** — `HttpServiceProvider
+implements ServiceProvider`. Solves a real design problem: `Deno.serve`'s
+handler must return a `Response`, but `ServiceProvider.forward()`/`reject()`
+are `Promise<void>` by design (deliberately opaque — `Guard` doesn't know or
+care what happens after a verdict is carried out) and `Guard.execute()`
+itself returns nothing usable either. Rather than having the HTTP handler
+read a captured field off `HttpServiceProvider` after the fact (rejected as
+a leak — the handler would have to know about an adapter-specific field,
+reaching past the `ServiceProvider` interface), `HttpServiceProvider` is
+constructed with a `resolve` function from `Promise.withResolvers<Response>()`,
+called by `forward()`/`reject()` as their side effect. The handler creates
+the promise/resolver pair *before* calling `guard.execute()`, and its return
+value is just `await promise` — it already holds the exact value it needs
+before `Guard` even runs; no property is ever read back off anything.
+`forward()` reverse-proxies to `config.upstreamUrl` via `fetch` with
+`redirect: 'manual'` (so upstream redirects are relayed raw, not
+auto-followed) and relays method/headers/body; `reject()` resolves a bare
+`403`.
+
+**`source/core/guard/manifest/http-manifest-action-resolver.ts`** — renamed
+from `ManifestActionResolver`: it was always built against the web-standard
+`Request`, so calling it transport-agnostic was misleading. `HttpServiceProvider`
+lives in the sibling `http/` folder (not `manifest/`), since it's HTTP-specific
+infrastructure but not manifest-related at all.
+
+**PolicyRegistry bootstrap (stubbed, not the real design)**: at startup,
+`build-server.ts` populates `InMemoryPolicyRegistry` under a 1:1 convention
+— every manifest action is governed by exactly one policy of the identical
+name. This is *not* the real answer: policy-to-action associations are
+meant to be a genuinely live, runtime-queryable, pluggable, possibly-cached
+lookup (a KV store, a YAML file, a separate service — unspecified, written
+by some other system/process, potentially changing without a redeploy) —
+see Phase 4c above. The 1:1 stub exists only to prove the request pipeline
+end-to-end today.
+
+**New naming convention surfaced and fixed**: manifest `id` and action
+`name`s get `.`-joined into Rego package/entrypoint paths (see Phase 3), and
+Rego package identifiers cannot contain hyphens (`opa build` fails with
+`rule name conflicts with built-in function` — confirmed directly). `parseManifest`
+now rejects any `id` or action-name segment that isn't a valid Rego
+identifier (`^[A-Za-z_][A-Za-z0-9_]*$`), with an error message explaining
+composite names must use `_`, not `-`. This is the same "how do we guarantee
+registered policy ids correspond to real Rego paths" integrity question
+flagged when `PolicyRegistry` was designed (Phase 4) — validating manifest
+identifiers up front is a partial answer; the rest belongs to Phase 4c.
+
+Verified end-to-end manually: ran the real server against a fixture manifest
++ compiled bundle + a fake upstream `Deno.serve` instance, `curl`'d an
+allowed request (real reverse-proxy relay confirmed via upstream log),
+a request missing required context (403, upstream never contacted), a
+request the policy denies (403), and an unmatched route (403) — plus
+confirmed `loadConfig`'s fail-fast behavior with a genuinely missing env var.
 
 ### Phase 7 — error handling & failure modes
-Not yet addressed anywhere: `Guard.execute()` currently has no failure
-handling — if `ActionResolver.resolve()`, `PolicyRepository.findPoliciesFor()`,
-`PolicyEngine.evaluate()`, or `DecisionStrategy.combine()` throws/rejects, the
-error propagates out of `Guard.execute()` uncaught. Needs a decision: does
-`Guard` catch internal errors and treat them as an implicit reject (fail
-closed, consistent with the existing unmatched-action behavior), or is
-catching left entirely to the composition root (Phase 5) / HTTP layer (Phase
-6)? Whichever is chosen must be applied consistently and covered by tests
-before this is production-ready — right now it's an unhandled gap, not a
-made decision.
+Still not addressed: `Guard.execute()` has no failure handling — if
+`ActionResolver.resolve()`, `PolicyRepository.findPoliciesFor()`,
+`PolicyEngine.evaluate()`, or `DecisionStrategy.combine()` throws/rejects,
+the error propagates out of `Guard.execute()` uncaught. Confirmed concretely
+in Phase 5: `guard-proxy`'s handler has no try/catch either, so today an
+internal error would surface as an unhandled rejection in `Deno.serve`
+rather than a clean response. Needs a decision: does `Guard` catch internal
+errors and treat them as an implicit reject (fail closed, consistent with
+the existing unmatched-action behavior), or is catching left entirely to the
+composition root / HTTP layer (both now built in Phase 5, at
+`source/apps/guard/proxy/`)? Whichever is chosen must be applied consistently
+and covered by tests before this is production-ready.
 
 ### Phase 8 — observability & audit
 `Decision` already carries the `PolicyResult[]` that produced it, specifically
@@ -304,6 +367,8 @@ nothing about `core` design depends on how the bundle physically arrives.
 ## Verification approach per phase
 Each phase adds its own fakes/fixtures and a test suite runnable via `deno test`,
 independent of later phases' infra. No phase's tests should require network
-access, a real OPA binary, or a real HTTP server until Phase 3+ (real OPA) and
-Phase 6 (real HTTP) respectively — and even then, scoped to that phase's own
-adapter package, not `core`.
+access or a real OPA binary until Phase 3+ (real OPA) — and even then, scoped
+to that phase's own adapter package, not `core`. Phase 5 is the first to need
+a real HTTP server and real network access in its tests (`HttpServiceProvider`'s
+suite spins up an ephemeral `Deno.serve` as a fake upstream), scoped to
+`source/core/guard/http/` and `source/apps/guard/proxy/`.
