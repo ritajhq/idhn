@@ -78,7 +78,7 @@
           "jsr:@std/assert@1.0.14"
         ]
       },
-      "source/libs/judge-opa": {
+      "source/core/judge-opa": {
         "dependencies": [
           "jsr:@std/assert@1.0.14",
           "npm:@open-policy-agent/opa-wasm@1.10.0"
