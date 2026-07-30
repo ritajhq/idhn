@@ -147,20 +147,86 @@ service, etc.), and any authority/auth model for *who* is allowed to call
 `associate`/`dissociate` — both are later infrastructure decisions the
 interface doesn't need settled in advance.
 
-### Phase 4a — manifest-driven `ActionResolver` adapter
-A concrete, declarative `ActionResolver` implementation — domain-specific (it
-produces `Action`/`Context`), so it belongs under `core/guard` alongside
-`Guard` itself, per the `core`/`libs` boundary above.
-Config-driven: a service owner authors a manifest describing, per action, how
-to recognize it from a request (e.g. method + path pattern) and which fields
-to extract into `Context`. Also the natural place to declare **external data
-enrichment** — e.g. "fetch `requester.points` from the points service" — as
-config (source name, endpoint, method, response-field mapping) rather than as
-something a Rego policy fetches itself mid-evaluation (see Phase 3's
-`http.send` note — this is the actual mechanism that replaces it). Exact
-manifest schema, the enrichment-fetch mechanism, caching, and failure handling
-(what happens if an external source is unreachable) are all open design
-questions to resolve when we start this phase — not yet decided.
+### Phase 4a — manifest-driven `ActionResolver` adapter (done)
+A concrete, declarative `ActionResolver` implementation, `ManifestActionResolver`,
+living at `source/core/guard/manifest/` (domain-specific — produces `Action`/
+`Context` — so under `core/guard` alongside `Guard` itself, per the `core`/`libs`
+boundary above).
+
+**Manifest schema** (YAML, parsed via `@std/yaml`, validated by a hand-written
+parser with precise per-field error paths — no schema library dependency):
+
+```yaml
+id: billing-service
+
+actions:
+  - name: invoice.approve
+    match:
+      method: POST                     # string | string[]
+      path: /invoices/:id/approve      # path-to-regexp pattern, string | string[]
+      header:                          # optional: string | string[] | {name, value}[]
+        - name: x-api-version
+          value: "2"
+    extract:                           # optional list
+      - from: { property: path, using: id }
+        as: invoiceId
+      - from: { property: header, using: x-user-id }
+        as: subject
+      - from: { property: header, using: x-request-note }
+        as: note
+        optional: true                 # default false — missing ⇒ action fails to match
+      - from: { property: body, using: customer.id, type: json }
+        as: customerId                 # type: json | form | text; only meaningful for body
+      - from: { property: constant, using: production }
+        as: environment                # using is the literal value itself
+```
+
+Key decisions, each reached after deliberately surveying prior art (OPA-Envoy,
+Envoy `ext_authz`, Kong's OPA plugin, Kubernetes Gateway API) rather than
+inventing from scratch:
+- **Declarative field extraction is a real gap in the ecosystem** — OPA/Envoy/
+  Kong all forward the whole request into policy input and let Rego pick
+  fields itself. We diverge deliberately: `Context` is meant to be a
+  minimal, curated fact set, keeping policies free of request-shape
+  knowledge.
+- **Path patterns use `path-to-regexp`** (the library behind Express/React
+  Router; `:id`-style params) — a real dependency, not our own matcher,
+  chosen over OpenAPI's `{id}` convention since it's what `path: :id` syntax
+  actually is under the hood and confirmed to work cleanly under Deno via
+  `npm:`.
+- **`method`/`path` accept a single value or an array**; `header` accepts a
+  bare name (presence-only), an array of names, or an array of `{name,
+  value}` (exact-value match). Actions are tried in document order,
+  first whole match wins.
+- **`extract` entries are required by default** for `query`/`header`/`body`
+  sources (`path` and `constant` can never be absent once matched) — a
+  missing required field fails that action's match entirely, falling
+  through to the next action in the list. `optional: true` widens this to
+  "omit from `Context.facts` instead." Matches this system's existing
+  fail-closed defaults (`DenyOverridesStrategy`'s fallback, `Guard`'s
+  unmatched-action reject).
+- **Body parsing needs an explicit `type`** (`json`/`form`/`text`) since
+  `extract`'s `using` (a field path) is meaningless without knowing the
+  body's shape; the body is read and parsed once per request and reused
+  across multiple body `extract` entries (a `Request` body can only be
+  consumed once).
+- **`id` is dot-prefixed onto every action `name`** when resolved into an
+  actual `Action` (`invoice.approve` → `Action("billing-service.invoice.approve")`),
+  guaranteeing cross-service action-name isolation without requiring
+  manifest authors to write the prefix themselves.
+
+Built against the web-standard `Request`/`URL`/`Headers` (native in Deno),
+not a bespoke request type — so a real Phase 6 HTTP server needs no adapter
+code to hand `ManifestActionResolver` what it needs.
+
+Deliberately deferred: **external data enrichment** (e.g. "fetch
+`requester.points` from a points service" as declarative config, replacing
+what Phase 3 ruled out doing via Rego's `http.send`) is not part of this
+schema yet — `extract`'s `constant`/`path`/`query`/`header`/`body` sources
+only ever read from the request itself. A future `from.property: external`
+(or similar) kind, with its own config for endpoint/method/response mapping,
+caching, and failure handling, is a natural extension but intentionally out
+of scope for this slice.
 
 ### Phase 4b — multi-policy integration test
 Before trusting `DenyOverridesStrategy` in production, run it against *real*

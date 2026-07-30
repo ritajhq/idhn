@@ -1,0 +1,43 @@
+id: billing-service
+
+actions:
+  - name: invoice.approve
+    match:
+      method: POST
+      path: /invoices/:id/approve
+      header:
+        - name: x-api-version
+          value: '2'
+    extract:
+      - from:
+          property: path
+          using: id
+        as: invoiceId
+      - from:
+          property: header
+          using: x-user-id
+        as: subject
+      - from:
+          property: header
+          using: x-request-note
+        as: note
+        optional: true
+      - from:
+          property: body
+          using: customer.id
+          type: json
+        as: customerId
+      - from:
+          property: constant
+          using: production
+        as: environment
+
+  - name: invoice.read
+    match:
+      method: [GET, HEAD]
+      path: ['/invoices/:id', '/invoices/:id/summary']
+    extract:
+      - from:
+          property: path
+          using: id
+        as: invoiceId

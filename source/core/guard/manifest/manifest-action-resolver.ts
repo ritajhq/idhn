@@ -1,0 +1,44 @@
+import { Action, Context } from '@mithaq/judge'
+import type { ActionResolver, ResolvedAction } from '../action-resolver.ts'
+import { extractContext } from './extract-context.ts'
+import { matchRequest } from './match-request.ts'
+import type { Manifest } from './schema.ts'
+
+/**
+ * An `ActionResolver` driven entirely by a declarative `Manifest`: tries
+ * each of the manifest's actions in order against the request, and resolves
+ * to the first whole match (method + path + header criteria, and every
+ * non-optional `extract` entry present). Constructed per-request with the
+ * `Manifest` (shared across requests) and the one `Request` it's judging.
+ */
+export class ManifestActionResolver implements ActionResolver {
+  constructor(
+    private readonly manifest: Manifest,
+    private readonly request: Request,
+  ) {}
+
+  async resolve(): Promise<ResolvedAction | null> {
+    for (const manifestAction of this.manifest.actions) {
+      const matchResult = matchRequest(manifestAction.match, this.request)
+      if (matchResult === null) {
+        continue
+      }
+
+      const facts = manifestAction.extract === undefined
+        ? {}
+        : await extractContext(
+          manifestAction.extract,
+          this.request,
+          matchResult,
+        )
+      if (facts === null) {
+        continue
+      }
+
+      const action = new Action(`${this.manifest.id}.${manifestAction.name}`)
+      return { action, context: new Context(facts) }
+    }
+
+    return null
+  }
+}
