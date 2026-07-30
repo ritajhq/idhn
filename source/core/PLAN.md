@@ -15,6 +15,14 @@ infrastructure/tech-stack decisions (Deno vs not, OPA-WASM vs subprocess, HTTP
 framework, GitHub webhooks, CI). Each phase produces something independently
 testable with fakes before the next phase's infra is chosen.
 
+**`core/` vs `libs/`** is not "pure logic vs I/O." It's "domain-specific vs
+generic." Anything that speaks in this system's own vocabulary — `Action`,
+`Policy`, `Context`, `Verdict`, `Decision` — belongs under `core/`, regardless
+of whether it happens to do I/O, load WASM, or hold mutable state (e.g.
+`judge-opa`'s OPA-WASM adapter, `judge`'s `InMemoryPolicyRegistry`). `libs/` is
+reserved for genuinely generic, reusable-on-any-project utilities that carry
+no authorization-domain vocabulary at all (nothing lives there yet).
+
 ## Architecture boundary (decided)
 
 - **`core/judge`** (built) — pure domain: `Action`, `Context`, `Policy`, `Verdict`,
@@ -49,11 +57,14 @@ testable with fakes before the next phase's infra is chosen.
     `actionResolver.resolve()`; if `null`, call `serviceProvider.reject()`;
     otherwise call `judge.decide(action, context)` and call
     `serviceProvider.forward()` if allowed, `serviceProvider.reject()` otherwise.
-- **Everything below is infrastructure**, built as adapters outside `core`,
-  implementing the ports above: OPA-backed `PolicyEngine`, a policy-bundle-backed
-  `PolicyRepository`, an HTTP server wrapping `Guard`, a manifest file loader,
-  OPA bundle build/deploy tooling. None of this is designed yet — deliberately
-  deferred until the ports that constrain it exist.
+- **Concrete implementations of the ports above** — OPA-backed `PolicyEngine`
+  (`core/judge-opa`), `PolicyRegistry`/`PolicyRepository` storage
+  (`core/judge`'s `InMemoryPolicyRegistry`, see Phase 4), an HTTP server
+  wrapping `Guard`, a manifest file loader — live alongside the domain
+  packages under `core/` when they speak the domain's vocabulary (see the
+  `core/` vs `libs/` note above), or under `source/apps/` once they're an
+  actual running process (Phase 5). Genuinely generic, non-domain-specific
+  utilities (none exist yet) would go under `libs/`.
 
 ## Phases
 
@@ -62,6 +73,11 @@ testable with fakes before the next phase's infra is chosen.
 `PolicyRepository`/`PolicyEngine`/`DecisionStrategy` ports, `DenyOverridesStrategy`,
 `Judge` orchestrator. Tested entirely against hand-written fakes. Lives at
 `source/core/judge/`.
+
+Also includes (added in Phase 4, see below, but living in this same package
+per the `core`/`libs` boundary): `PolicyRegistry` — a storage interface
+extending `PolicyRepository` with `associate`/`dissociate` mutations — and
+`InMemoryPolicyRegistry`, a concrete in-memory implementation.
 
 ### Phase 2 — `core/guard` (done)
 Pure domain for the interception side, no HTTP server yet. See the shape under
@@ -108,22 +124,33 @@ ever consulted. A policy that calls `http.send` should fail loudly at
 evaluation time rather than silently reintroducing network I/O — and hidden
 side effects — into what's designed to be a deterministic, replayable step.
 
-Lives outside `core` (e.g. `source/libs/judge-opa/`). Tested against real
-`.rego` fixtures, no network/webhook/deploy concerns yet — bundle loading here
-starts from a local file path; remote bundle fetching is Phase 10.
+Lives at `source/core/judge-opa/` (domain-specific — see the `core`/`libs`
+note above; not under `libs/` despite being a concrete adapter with real
+WASM-loading I/O). Tested against real `.rego` fixtures, no network/webhook/
+deploy concerns yet — bundle loading here starts from a local file path;
+remote bundle fetching is Phase 10.
 
-### Phase 4 — `PolicyRepository` adapter, wired to `judge-opa`
-Resolves action → governing `Policy` references. Since one loaded
-`OpaPolicyEngine` already serves every policy in the bundle (see Phase 3),
-`PolicyRepository` just needs to name which package(s)/entrypoints govern a
-given action — it doesn't need to coordinate bundle loading with the engine
-at all. Likely backed by metadata embedded in the same Rego bundle (e.g.
-package annotations) or a sibling manifest file shipped alongside the
-`.rego` sources — exact mechanism TBD when we get here, kept independent of
-Phase 3's engine choice.
+### Phase 4 — `PolicyRegistry` storage (done)
+Resolves, and lets something register, which policies govern which actions.
+Framed as **storage**, not a client to an already-existing registry service:
+`PolicyRegistry` (in `core/judge`) extends `PolicyRepository` with
+`associate(action, policy)` / `dissociate(action, policy)` — idempotent,
+no-op-safe mutations on individual action/policy pairs, rather than
+replacing a whole list at once. `InMemoryPolicyRegistry` is the first
+concrete implementation, sufficient for tests and early development. A
+SQL-backed or HTTP-fronted implementation can replace it later without
+`Judge` (which only ever depends on `PolicyRepository`) changing at all —
+same seam pattern as `PolicyEngine`/`OpaPolicyEngine`.
+
+Deliberately not built here: any real backing store (SQL, a separate
+service, etc.), and any authority/auth model for *who* is allowed to call
+`associate`/`dissociate` — both are later infrastructure decisions the
+interface doesn't need settled in advance.
 
 ### Phase 4a — manifest-driven `ActionResolver` adapter
-A concrete, declarative `ActionResolver` implementation living outside `core`.
+A concrete, declarative `ActionResolver` implementation — domain-specific (it
+produces `Action`/`Context`), so it belongs under `core/guard` alongside
+`Guard` itself, per the `core`/`libs` boundary above.
 Config-driven: a service owner authors a manifest describing, per action, how
 to recognize it from a request (e.g. method + path pattern) and which fields
 to extract into `Context`. Also the natural place to declare **external data
@@ -188,9 +215,10 @@ for explainability — but nothing yet says where that goes. For an
 authorization system this is usually load-bearing (audit trails, incident
 investigation, debugging a wrongly-denied request), not optional polish.
 Likely shape: an `AuditSink`-style port `Guard` or `Judge` can be given,
-called with the `Decision` after every evaluation, implemented outside `core`
-(structured logs, an event stream, etc.) — exact interface TBD when we get
-here.
+called with the `Decision` after every evaluation. The port itself (speaking
+in `Decision`) would live under `core`; a concrete implementation (structured
+logs, an event stream, etc.) may or may not be domain-specific enough to
+belong there too — exact interface and placement TBD when we get here.
 
 ### Phase 9 — CI
 `deno test`, `deno lint`, `deno fmt --check` running on every push/PR, scoped
