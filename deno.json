@@ -4,5 +4,9 @@
     "source/core/**",
     "source/libs/**",
     ".ensemble/kits/**"
-  ]
+  ],
+  "imports": {
+    "@ensemble/kit-sdk": "./.ensemble/repository/source/core/kit-sdk/index.ts",
+    "@ensemble/core": "./.ensemble/repository/source/core/core/index.ts"
+  }
 }

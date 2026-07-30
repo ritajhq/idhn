@@ -1,5 +1,5 @@
-# Configure each app's build kit here, e.g.:
-#
-# build:
-#   my-app:
-#     kit: deno.bundle
+build:
+  guard/proxy:
+    kit: deno.bundle
+  judge/server:
+    kit: deno.bundle
