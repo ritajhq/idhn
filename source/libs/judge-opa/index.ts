@@ -1,1 +1,4 @@
-export { OpaPolicyEngine, PolicyNotLoadedError } from './opa-policy-engine.ts'
+export {
+  EntrypointNotFoundError,
+  OpaPolicyEngine,
+} from './opa-policy-engine.ts'

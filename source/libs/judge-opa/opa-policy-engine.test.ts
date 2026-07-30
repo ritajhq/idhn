@@ -1,28 +1,21 @@
 import { assertEquals, assertRejects } from '@std/assert'
 import { Context, Policy, Verdict } from '@mithaq/judge'
-import { OpaPolicyEngine, PolicyNotLoadedError } from './opa-policy-engine.ts'
+import {
+  EntrypointNotFoundError,
+  OpaPolicyEngine,
+} from './opa-policy-engine.ts'
 
-const fixturesDir = new URL('./tests/fixtures/', import.meta.url)
+const bundlePath = new URL('./tests/fixtures/policy.wasm', import.meta.url)
 
 const approvePolicy = new Policy('invoice.approve')
 const neutralPolicy = new Policy('invoice.neutral')
 
 async function loadFixtureEngine(): Promise<OpaPolicyEngine> {
-  const approveWasm = await Deno.readFile(
-    new URL('invoice-approve.wasm', fixturesDir),
-  )
-  const neutralWasm = await Deno.readFile(
-    new URL('invoice-neutral.wasm', fixturesDir),
-  )
-  return await OpaPolicyEngine.load(
-    new Map([
-      [approvePolicy, approveWasm],
-      [neutralPolicy, neutralWasm],
-    ]),
-  )
+  const wasmBytes = await Deno.readFile(bundlePath)
+  return await OpaPolicyEngine.load(wasmBytes)
 }
 
-Deno.test("OpaPolicyEngine.evaluate: returns Allow when the compiled policy's allow rule is true", async () => {
+Deno.test("OpaPolicyEngine.evaluate: returns Allow when the selected entrypoint's allow rule is true", async () => {
   const engine = await loadFixtureEngine()
 
   const result = await engine.evaluate(
@@ -33,7 +26,7 @@ Deno.test("OpaPolicyEngine.evaluate: returns Allow when the compiled policy's al
   assertEquals(result.verdict, Verdict.Allow)
 })
 
-Deno.test("OpaPolicyEngine.evaluate: returns Deny when the compiled policy's allow rule is false", async () => {
+Deno.test("OpaPolicyEngine.evaluate: returns Deny when the selected entrypoint's allow rule is false", async () => {
   const engine = await loadFixtureEngine()
 
   const result = await engine.evaluate(
@@ -44,7 +37,7 @@ Deno.test("OpaPolicyEngine.evaluate: returns Deny when the compiled policy's all
   assertEquals(result.verdict, Verdict.Deny)
 })
 
-Deno.test("OpaPolicyEngine.evaluate: returns Neutral when the compiled policy's allow rule is undefined", async () => {
+Deno.test("OpaPolicyEngine.evaluate: returns Neutral when the selected entrypoint's allow rule is undefined", async () => {
   const engine = await loadFixtureEngine()
 
   const result = await engine.evaluate(
@@ -55,11 +48,27 @@ Deno.test("OpaPolicyEngine.evaluate: returns Neutral when the compiled policy's 
   assertEquals(result.verdict, Verdict.Neutral)
 })
 
-Deno.test("OpaPolicyEngine.evaluate: rejects when asked to evaluate a policy it wasn't loaded with", async () => {
+Deno.test('OpaPolicyEngine.evaluate: evaluates different policies against the same loaded bundle', async () => {
+  const engine = await loadFixtureEngine()
+
+  const approveResult = await engine.evaluate(
+    approvePolicy,
+    new Context({ subject: 'alice' }),
+  )
+  const neutralResult = await engine.evaluate(
+    neutralPolicy,
+    new Context({ subject: 'alice' }),
+  )
+
+  assertEquals(approveResult.verdict, Verdict.Allow)
+  assertEquals(neutralResult.verdict, Verdict.Neutral)
+})
+
+Deno.test('OpaPolicyEngine.evaluate: rejects when the bundle has no entrypoint for the policy', async () => {
   const engine = await loadFixtureEngine()
 
   await assertRejects(
     () => engine.evaluate(new Policy('unknown.policy'), new Context()),
-    PolicyNotLoadedError,
+    EntrypointNotFoundError,
   )
 })

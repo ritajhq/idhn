@@ -86,8 +86,15 @@ implementation — all of which conflicts with "minimal build-step ceremony" and
 lower maintenance risk. OPA-WASM is official, versioned, and backed by a
 CNCF-graduated, multi-vendor-governed project.
 
-`Policy.id` is treated as a Rego package path with a conventional rule name
-(e.g. `Policy("invoice.approve")` → query `data.invoice.approve.allow`);
+A whole policy repo's `.rego` tree compiles to **one bundle, one `policy.wasm`
+module** — `opa build -t wasm` accepts multiple `-e` entrypoints in a single
+build, and the OPA-WASM runtime selects which compiled rule to run per
+`evaluate()` call via an entrypoint name, all against one loaded module. So
+`OpaPolicyEngine` is loaded once from one bundle (`OpaPolicyEngine.load(wasmBytes)`)
+and can evaluate every policy the bundle contains — there's no need for, and
+we don't build, a separate WASM blob per policy. `Policy.id` is treated as a
+Rego package path with a conventional rule name (e.g. `Policy("invoice.approve")`
+→ entrypoint `invoice/approve/allow`, i.e. `data.invoice.approve.allow`);
 undefined → `Verdict.Neutral`, `true` → `Verdict.Allow`, `false` →
 `Verdict.Deny`.
 
@@ -106,18 +113,14 @@ Lives outside `core` (e.g. `source/libs/judge-opa/`). Tested against real
 starts from a local file path; remote bundle fetching is Phase 10.
 
 ### Phase 4 — `PolicyRepository` adapter, wired to `judge-opa`
-Resolves action → governing `Policy` references. This phase must also settle
-the piece Phase 3 left open: `OpaPolicyEngine.load()` takes a
-`ReadonlyMap<Policy, Uint8Array>` of already-compiled bundles, but nothing yet
-says where those bytes come from at runtime, or how `PolicyRepository` and the
-engine agree on the same set of policy ids. Needs a decided-on-arrival
-convention — most likely a directory of `.wasm` files (one per policy,
-filename or a small index file mapping id → path) that both adapters are
-built from at startup. Likely backed by metadata embedded in the same Rego
-bundle (e.g. package annotations) or a sibling manifest file shipped alongside
-the `.rego`/`.wasm` — exact mechanism TBD when we get here, kept independent
-of Phase 3's engine choice, but must produce a `Policy` set that's a subset of
-what's loaded into `OpaPolicyEngine`.
+Resolves action → governing `Policy` references. Since one loaded
+`OpaPolicyEngine` already serves every policy in the bundle (see Phase 3),
+`PolicyRepository` just needs to name which package(s)/entrypoints govern a
+given action — it doesn't need to coordinate bundle loading with the engine
+at all. Likely backed by metadata embedded in the same Rego bundle (e.g.
+package annotations) or a sibling manifest file shipped alongside the
+`.rego` sources — exact mechanism TBD when we get here, kept independent of
+Phase 3's engine choice.
 
 ### Phase 4a — manifest-driven `ActionResolver` adapter
 A concrete, declarative `ActionResolver` implementation living outside `core`.
