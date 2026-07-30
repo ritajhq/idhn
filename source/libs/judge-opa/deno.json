@@ -4,5 +4,10 @@
   "imports": {
     "@open-policy-agent/opa-wasm": "npm:@open-policy-agent/opa-wasm@1.10.0",
     "@std/assert": "jsr:@std/assert@1.0.14"
+  },
+  "fmt": {
+    "semiColons": false,
+    "singleQuote": true,
+    "trailingCommas": "onlyMultiLine"
   }
 }
