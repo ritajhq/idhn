@@ -9,11 +9,12 @@ never exposed publicly — only the guard proxy talks to it.
 cd source/apps/guard/fake-service
 PORT=9100 deno task start
 
-# terminal 2 — the judge server, holding the manifest/policy bundle
+# terminal 2 — the judge server, holding the policy bundle and its
+# KV-backed policy registry (action->policy associations)
 cd source/apps/judge/server
-SERVICE_MANIFEST_PATH=../../guard/demo/manifest.yaml \
 POLICY_BUNDLE_PATH=../../guard/demo/policy.wasm \
 JUDGE_PORT=9300 \
+KV_PATH=/tmp/judge-demo.db \
 deno task start
 
 # terminal 3 — the proxy, pointed at the judge server, this demo's
@@ -25,6 +26,18 @@ UPSTREAM_URL=http://localhost:9100 \
 REJECT_RESPONSE_URL=file://$(pwd)/../demo/forbidden.html \
 PROXY_PORT=9200 \
 deno task start
+```
+
+Before the demo policy can ever allow anything, seed the association it's
+governed by (judge-server never bootstraps this from the manifest — some
+other integration-level actor is expected to write it into KV):
+
+```sh
+deno eval --unstable-kv "
+const kv = await Deno.openKv('/tmp/judge-demo.db')
+await kv.set(['policies', 'demo.home.visit', 'demo.home.visit'], true)
+kv.close()
+"
 ```
 
 Then open in a browser:

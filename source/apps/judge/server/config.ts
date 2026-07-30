@@ -1,7 +1,7 @@
 export interface Config {
-  manifestPath: string
   bundlePath: string
   port: number
+  kvPath: string | undefined
 }
 
 /** The slice of `Deno.Env` `loadConfig` actually needs, so tests can supply a lightweight fake. */
@@ -16,10 +16,15 @@ const DEFAULT_PORT = 8081
 /** Reads and validates the server's configuration from environment variables. Throws `ConfigError` on any missing or invalid value. */
 export function loadConfig(env: EnvReader = Deno.env): Config {
   return {
-    manifestPath: requireEnv(env, 'SERVICE_MANIFEST_PATH'),
     bundlePath: requireEnv(env, 'POLICY_BUNDLE_PATH'),
     port: readPort(env, 'JUDGE_PORT'),
+    kvPath: readOptionalEnv(env, 'KV_PATH'),
   }
+}
+
+function readOptionalEnv(env: EnvReader, name: string): string | undefined {
+  const value = env.get(name)
+  return value === undefined || value.length === 0 ? undefined : value
 }
 
 function requireEnv(env: EnvReader, name: string): string {

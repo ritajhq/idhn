@@ -249,17 +249,71 @@ no-policies-registered cases. `judge-opa`'s fixture `build.sh` was extended
 with the two new entrypoints; the shared `policy.wasm` bundle now contains
 four entrypoints total.
 
-### Phase 4c — pluggable, cached `PolicyRepository` (new, not yet started)
-The real answer to "which policies govern which actions." Phase 5 (below)
-needed something working today and stubbed it with `InMemoryPolicyRegistry`
-under a 1:1 action-name-equals-policy-id convention — not the real design.
-The actual association is meant to be a genuinely live, runtime-queryable
-lookup, written by some other system/process (a KV store, a YAML file, a
-separate service — unspecified/pluggable), that can change without a
-redeploy but not so often that a cache in front of it is unwarranted. Needs
-its own port design plus a caching layer, with the exact backing store,
-cache invalidation strategy, and how the write side is exposed all still
-open — deliberately deferred rather than designed ad hoc inside Phase 5.
+### Phase 4c — pluggable `PolicyRepository` storage (done)
+The real answer to "which policies govern which actions." Phase 5 needed
+something working immediately and stubbed it with `InMemoryPolicyRegistry`
+populated at startup from the manifest, under a 1:1
+action-name-equals-policy-id convention — not the real design, and it lived
+in the wrong place: `judge-server` had no legitimate reason to know about
+the HTTP manifest at all (that's a `guard`-side, request-recognition
+concern). Both are removed — `judge-server`'s `build-server.ts` no longer
+loads a manifest or calls `associate()` itself, and `Config` dropped
+`manifestPath`/`SERVICE_MANIFEST_PATH` entirely.
+
+**Cleared up an early misunderstanding while designing this phase**, worth
+recording since it nearly led the design astray: the plan to author `.rego`
+policies in a git repo with a path-mirrors-package-name convention (the
+original webhook idea in this doc's Context section, and Phase 10's "bundle
+delivery pipeline") is an **authoring/build-pipeline** concern — how source
+becomes a compiled `policy.wasm` bundle — and has nothing to do with
+`PolicyRepository` at runtime. `PolicyRegistry`'s existing `associate`/
+`dissociate` design (Phase 4) was already correct and needed no rethink:
+`Action` and `Policy` are just opaque id strings to it; nothing in
+`core/judge` needs to know *why* a given action name and policy id happen to
+align (that alignment is an integration-level concern, owned by whatever
+writes associations into the registry — a human, an admin tool, a sync job).
+The only real gap was a **persisted backing store** to replace
+`InMemoryPolicyRegistry` in production.
+
+**`source/core/judge/kv-policy-registry.ts`** — `KvPolicyRegistry implements
+PolicyRegistry`, backed by `Deno.Kv` (constructor-injected, so tests use
+`Deno.openKv(':memory:')` rather than touching disk). One KV row per
+`(action, policy)` association — key `["policies", action.name, policy.id]`,
+value `true` — chosen explicitly over one row per action holding a
+`Policy[]` array: a single `kv.set`/`kv.delete` is naturally idempotent/
+no-op-safe with no read-modify-write or `kv.atomic()` transaction needed,
+matching `associate`/`dissociate`'s existing contract for free.
+`findPoliciesFor` does a `kv.list({ prefix: ["policies", action.name] })`
+and reconstructs a `Policy` from each key's third segment. Verified: 8 tests
+covering the same cases as `InMemoryPolicyRegistry`'s suite, plus one
+confirming two `KvPolicyRegistry` instances see the same associations when
+opened against the same underlying store (proving persistence, not just
+correctness of the in-process object).
+
+**`source/apps/judge/server/`** — `config.ts` gained an optional `KV_PATH`
+(passed to `Deno.openKv(path)`; omitted falls through to Deno's own default
+location) — made explicit rather than always using the zero-arg default so
+the store stays inspectable (`deno eval --unstable-kv` or any Deno KV
+tooling can point at a known file). `build-server.ts` now just loads the OPA
+bundle and opens a `KvPolicyRegistry` — no manifest, no bootstrap loop.
+`deno.json`'s `start` task gained `--unstable-kv` and `--allow-write` (KV
+needs both to open/persist a local store).
+
+Deliberately not built here: a caching layer in front of `PolicyRegistry`
+(the original "pluggable, *cached*" framing) — `Deno.Kv` reads are already
+local/fast for the demo's scale, and premature caching would need an
+invalidation strategy that has no real requirement driving it yet. Revisit
+if/when write-side traffic patterns (who calls `associate`/`dissociate`, how
+often) are actually known. Also not built: any authority/auth model for who
+may call `associate`/`dissociate` on a live `judge-server` — still an open
+integration-level question, same as noted in Phase 4.
+
+Verified end-to-end manually against a real `judge-server` process with a
+fresh KV file: confirmed `POST /decide` denies when no association exists
+for an action (empty-results fallback, not an error), then seeded an
+association directly into the KV file (simulating the external
+integration-level writer) and confirmed both the allow and deny paths
+through the real OPA-compiled demo policy work correctly afterward.
 
 ### Phase 5 — composition root / process wiring, merged with Phase 6 — HTTP transport (done)
 The plan originally split "wiring" from "HTTP transport" into separate

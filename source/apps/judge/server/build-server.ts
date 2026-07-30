@@ -1,31 +1,27 @@
-import { loadManifestFile, type Manifest } from '@mithaq/guard'
 import {
-  Action,
   buildJudgeHandler,
   Decision,
   DenyOverridesStrategy,
-  InMemoryPolicyRegistry,
+  KvPolicyRegistry,
   LocalJudge,
-  Policy,
 } from '@mithaq/judge'
 import { OpaPolicyEngine } from '@mithaq/judge-opa'
 import type { Config } from './config.ts'
 
 /**
- * Builds everything the judge-server needs once at startup: loads the
- * manifest and OPA bundle, and populates a `PolicyRegistry` under the same
- * 1:1 convention `guard-proxy` used to stand in for a real, pluggable/cached
- * `PolicyRepository` (a separate, later phase).
+ * Builds everything the judge-server needs once at startup: the OPA bundle
+ * and a `PolicyRegistry` persisted in Deno KV. Action/policy associations
+ * are written into that KV store by whatever process owns that integration
+ * concern — judge-server only ever reads/serves them.
  */
 export async function buildServer(
   config: Config,
 ): Promise<(request: Request) => Promise<Response>> {
-  const manifest = await loadManifestFile(config.manifestPath)
   const wasmBytes = await Deno.readFile(config.bundlePath)
   const engine = await OpaPolicyEngine.load(wasmBytes)
 
-  const registry = new InMemoryPolicyRegistry()
-  await registerPolicies(registry, manifest)
+  const kv = await Deno.openKv(config.kvPath)
+  const registry = new KvPolicyRegistry(kv)
 
   const judge = new LocalJudge(
     registry,
@@ -34,17 +30,4 @@ export async function buildServer(
   )
 
   return buildJudgeHandler(judge)
-}
-
-async function registerPolicies(
-  registry: InMemoryPolicyRegistry,
-  manifest: Manifest,
-): Promise<void> {
-  for (const manifestAction of manifest.actions) {
-    const action = new Action(`${manifest.id}.${manifestAction.name}`)
-    await registry.associate(
-      action,
-      new Policy(`${manifest.id}.${manifestAction.name}`),
-    )
-  }
 }

@@ -2,7 +2,7 @@
   "name": "@mithaq/judge-server",
   "exports": "./main.ts",
   "tasks": {
-    "start": "deno run --allow-net --allow-read --allow-env main.ts"
+    "start": "deno run --unstable-kv --allow-net --allow-read --allow-write --allow-env main.ts"
   },
   "imports": {
     "@std/assert": "jsr:@std/assert@1.0.14"
