@@ -12,6 +12,8 @@ tmp="$(mktemp -d)"
 opa build -t wasm \
   -e invoice/approve/allow \
   -e invoice/neutral/allow \
+  -e invoice/approve/base/allow \
+  -e invoice/approve/fraud_override/allow \
   ./*.rego \
   -o "$tmp/bundle.tar.gz"
 tar xzf "$tmp/bundle.tar.gz" -C "$tmp"

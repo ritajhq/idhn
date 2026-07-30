@@ -228,16 +228,20 @@ only ever read from the request itself. A future `from.property: external`
 caching, and failure handling, is a natural extension but intentionally out
 of scope for this slice.
 
-### Phase 4b — multi-policy integration test
-Before trusting `DenyOverridesStrategy` in production, run it against *real*
-compiled OPA policies rather than synthetic `Verdict` values from a fake
-engine. Compile two or more genuine `.rego` fixtures (extending the pattern
-already used in `judge-opa`'s tests) representing a realistic multi-policy
-scenario for one action (e.g. a base policy + an override), and exercise the
-full `Judge` (real `PolicyRepository` + real `OpaPolicyEngine` +
-`DenyOverridesStrategy`) end-to-end. Closes the gap between "combination logic
-is unit-tested" and "combination logic is proven correct against actual Rego
-semantics."
+### Phase 4b — multi-policy integration test (done)
+`source/core/judge-opa/integration.test.ts` exercises the full, real stack —
+`Judge` + `InMemoryPolicyRegistry` + `OpaPolicyEngine` (loaded from the
+actual compiled bundle) + `DenyOverridesStrategy` — with no fakes anywhere.
+Fixture scenario: `invoice.approve.base` (allows under a $1000 threshold)
+plus `invoice.approve.fraud_override` (explicitly denies when `flagged`,
+otherwise stays undefined/Neutral — verified directly via `opa eval` before
+wiring into the test), both registered against one `invoice.approve` action.
+Proves the case that matters most: the override's explicit `Deny` wins even
+when the base policy would `Allow`, using genuine OPA-compiled output rather
+than synthetic `Verdict` values. Also covers the base-policy-denies and
+no-policies-registered cases. `judge-opa`'s fixture `build.sh` was extended
+with the two new entrypoints; the shared `policy.wasm` bundle now contains
+four entrypoints total.
 
 ### Phase 5 — composition root / process wiring
 Nothing so far actually runs as a process — every phase to this point is a
