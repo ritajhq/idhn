@@ -328,6 +328,41 @@ a request missing required context (403, upstream never contacted), a
 request the policy denies (403), and an unmatched route (403) — plus
 confirmed `loadConfig`'s fail-fast behavior with a genuinely missing env var.
 
+**Configurable reject response, added after Phase 5 landed**: `HttpServiceProvider.reject()`
+originally always answered a bare empty `403`. Since a service owner may want
+their own branded/informative rejection page — and that page could
+legitimately live anywhere (local disk, S3, a CDN), not just the filesystem
+— `RejectResponse` (`{ body: Uint8Array<ArrayBuffer>, contentType: string }`)
+is now an optional fourth constructor argument, and `source/core/guard/http/load-reject-response.ts`
+fetches it via the web-standard `fetch()` (which Deno confirmed handles
+`file://` URLs directly, alongside `http(s)://`) once at startup — not
+re-fetched per-request, since the page is realistically static and a
+network round-trip (potentially to S3) on every single rejection would be
+wasteful. `build-server.ts` wires a new optional `REJECT_RESPONSE_URL` env
+var through `loadConfig` into this. Content-type is taken from the fetched
+response's own header when present (real HTTP sources typically set it);
+falls back to inferring from the URL's file extension (`.html`, `.htm`,
+`.txt`, `.json`) since `fetch` on a `file://` URL returns no `content-type`
+at all (confirmed directly) and defaults to `application/octet-stream`
+otherwise.
+
+**Manual-testing aids, also added after Phase 5**: two new small apps under
+`source/apps/guard/`:
+- **`fake-service/`** — a tiny stand-in "protected service": renders an HTML
+  page showing exactly what request it received (method, path, headers,
+  body), so a request that reached it via the proxy is visually
+  distinguishable from a rejected one.
+- **`demo/`** — a manifest + `.rego` policy + compiled bundle + a custom
+  `forbidden.html`, designed to be exercised from a browser with no
+  `curl` needed: `GET /` is denied by default, `GET /?vip=true` is allowed
+  (the policy checks a `vip` query param, extracted via the manifest).
+  Includes a `README.md` with the exact commands to run `fake-service` and
+  `guard-proxy` together and the URLs to open. Verified manually: both the
+  allow path (real proxying to `fake-service`, confirmed via its request
+  dump) and the reject path (custom 403 page served, correct
+  `content-type: text/html; charset=utf-8`) work as designed, plus the
+  bare-403 fallback when `REJECT_RESPONSE_URL` is unset.
+
 ### Phase 7 — error handling & failure modes
 Still not addressed: `Guard.execute()` has no failure handling — if
 `ActionResolver.resolve()`, `PolicyRepository.findPoliciesFor()`,

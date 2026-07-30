@@ -3,7 +3,9 @@ import {
   HttpManifestActionResolver,
   HttpServiceProvider,
   loadManifestFile,
+  loadRejectResponse,
   type Manifest,
+  type RejectResponse,
 } from '@mithaq/guard'
 import {
   Action,
@@ -30,6 +32,10 @@ export async function buildServer(
   const manifest = await loadManifestFile(config.manifestPath)
   const wasmBytes = await Deno.readFile(config.bundlePath)
   const engine = await OpaPolicyEngine.load(wasmBytes)
+  const rejectResponse: RejectResponse | undefined =
+    config.rejectResponseUrl === undefined
+      ? undefined
+      : await loadRejectResponse(config.rejectResponseUrl)
 
   const registry = new InMemoryPolicyRegistry()
   await registerPolicies(registry, manifest)
@@ -48,6 +54,7 @@ export async function buildServer(
       request,
       config.upstreamUrl,
       resolve,
+      rejectResponse,
     )
     const guard = new Guard(judge, actionResolver, serviceProvider)
 

@@ -1,0 +1,13 @@
+id: demo
+
+actions:
+  - name: home.visit
+    match:
+      method: GET
+      path: /
+    extract:
+      - from:
+          property: query
+          using: vip
+        as: vip
+        optional: true

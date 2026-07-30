@@ -19,6 +19,35 @@ Deno.test('loadConfig: reads all required values', () => {
   assertEquals(config.upstreamUrl, new URL('http://upstream.internal:8000'))
 })
 
+Deno.test('loadConfig: rejectResponseUrl is undefined when REJECT_RESPONSE_URL is unset', () => {
+  const config = loadConfig(fakeEnv(validEnv))
+
+  assertEquals(config.rejectResponseUrl, undefined)
+})
+
+Deno.test('loadConfig: reads rejectResponseUrl when REJECT_RESPONSE_URL is set', () => {
+  const config = loadConfig(
+    fakeEnv({
+      ...validEnv,
+      REJECT_RESPONSE_URL: 'https://cdn.example.test/403.html',
+    }),
+  )
+
+  assertEquals(
+    config.rejectResponseUrl,
+    new URL('https://cdn.example.test/403.html'),
+  )
+})
+
+Deno.test('loadConfig: throws when REJECT_RESPONSE_URL is set but not a valid URL', () => {
+  assertThrows(
+    () =>
+      loadConfig(fakeEnv({ ...validEnv, REJECT_RESPONSE_URL: 'not a url' })),
+    ConfigError,
+    'REJECT_RESPONSE_URL',
+  )
+})
+
 Deno.test('loadConfig: defaults PROXY_PORT to 8080 when unset', () => {
   const config = loadConfig(fakeEnv(validEnv))
 

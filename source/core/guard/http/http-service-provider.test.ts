@@ -1,5 +1,8 @@
 import { assertEquals } from '@std/assert'
-import { HttpServiceProvider } from './http-service-provider.ts'
+import {
+  HttpServiceProvider,
+  type RejectResponse,
+} from './http-service-provider.ts'
 
 async function withUpstream(
   handler: (request: Request) => Response | Promise<Response>,
@@ -89,7 +92,7 @@ Deno.test('HttpServiceProvider.forward: does not follow upstream redirects', asy
   )
 })
 
-Deno.test('HttpServiceProvider.reject: resolves with a 403, without contacting any upstream', async () => {
+Deno.test('HttpServiceProvider.reject: resolves with a bare 403 when no reject response is configured', async () => {
   const { promise, resolve } = Promise.withResolvers<Response>()
   const request = new Request('https://gateway.test/a', { method: 'GET' })
   const provider = new HttpServiceProvider(
@@ -102,4 +105,27 @@ Deno.test('HttpServiceProvider.reject: resolves with a 403, without contacting a
   const response = await promise
 
   assertEquals(response.status, 403)
+  assertEquals(await response.text(), '')
+})
+
+Deno.test('HttpServiceProvider.reject: serves the configured reject response body and content-type', async () => {
+  const { promise, resolve } = Promise.withResolvers<Response>()
+  const request = new Request('https://gateway.test/a', { method: 'GET' })
+  const rejectResponse: RejectResponse = {
+    body: new TextEncoder().encode('<h1>Forbidden</h1>'),
+    contentType: 'text/html; charset=utf-8',
+  }
+  const provider = new HttpServiceProvider(
+    request,
+    new URL('http://localhost:1/'),
+    resolve,
+    rejectResponse,
+  )
+
+  await provider.reject()
+  const response = await promise
+
+  assertEquals(response.status, 403)
+  assertEquals(response.headers.get('content-type'), 'text/html; charset=utf-8')
+  assertEquals(await response.text(), '<h1>Forbidden</h1>')
 })

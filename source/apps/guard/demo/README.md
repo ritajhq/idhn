@@ -1,0 +1,29 @@
+# Manual end-to-end demo
+
+Run the fake protected service and the guard proxy together, then browse
+through the proxy to see it work.
+
+```sh
+# terminal 1 — the "protected" service
+cd source/apps/guard/fake-service
+PORT=9100 deno task start
+
+# terminal 2 — the proxy, pointed at this demo's manifest/policy/403 page
+cd source/apps/guard/proxy
+SERVICE_MANIFEST_PATH=../demo/manifest.yaml \
+POLICY_BUNDLE_PATH=../demo/policy.wasm \
+UPSTREAM_URL=http://localhost:9100 \
+REJECT_RESPONSE_URL=file://$(pwd)/../demo/forbidden.html \
+PROXY_PORT=9200 \
+deno task start
+```
+
+Then open in a browser:
+
+- `http://localhost:9200/` — rejected (custom 403 page from `forbidden.html`,
+  since the demo policy requires `?vip=true`).
+- `http://localhost:9200/?vip=true` — allowed, proxied through to
+  `fake-service`, which shows exactly what request it received.
+
+Regenerate `policy.wasm` from `policy.rego` after editing it: `./build.sh`
+(requires the `opa` CLI).

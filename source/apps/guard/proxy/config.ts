@@ -3,6 +3,7 @@ export interface Config {
   bundlePath: string
   upstreamUrl: URL
   port: number
+  rejectResponseUrl: URL | undefined
 }
 
 /** The slice of `Deno.Env` `loadConfig` actually needs, so tests can supply a lightweight fake. */
@@ -21,6 +22,7 @@ export function loadConfig(env: EnvReader = Deno.env): Config {
     bundlePath: requireEnv(env, 'POLICY_BUNDLE_PATH'),
     upstreamUrl: requireUrl(env, 'UPSTREAM_URL'),
     port: readPort(env, 'PROXY_PORT'),
+    rejectResponseUrl: readOptionalUrl(env, 'REJECT_RESPONSE_URL'),
   }
 }
 
@@ -34,6 +36,18 @@ function requireEnv(env: EnvReader, name: string): string {
 
 function requireUrl(env: EnvReader, name: string): URL {
   const value = requireEnv(env, name)
+  return parseUrl(value, name)
+}
+
+function readOptionalUrl(env: EnvReader, name: string): URL | undefined {
+  const value = env.get(name)
+  if (value === undefined || value.length === 0) {
+    return undefined
+  }
+  return parseUrl(value, name)
+}
+
+function parseUrl(value: string, name: string): URL {
   try {
     return new URL(value)
   } catch {
