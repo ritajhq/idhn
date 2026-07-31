@@ -4,6 +4,14 @@ Run the fake protected service, the judge server, and the guard proxy
 together, then browse through the proxy to see it work. The judge server is
 never exposed publicly — only the guard proxy talks to it.
 
+The fastest way to bring all three up together (builds/packs each app,
+applies the `workflows/demo/terraform` stack, and seeds the policy registry
+for you): `ens workflow demo --job up`. Tear it down with
+`ens workflow demo --job down`. See `workflows/demo/workflow.yml`.
+
+What follows is the same stack run by hand — useful when iterating on one
+app without rebuilding its image each time.
+
 ```sh
 # terminal 1 — the "protected" service
 cd source/apps/guard/fake-service

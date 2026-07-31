@@ -494,6 +494,61 @@ then through the proxy, confirmed the same allow/deny outcomes end-to-end
 proving `guard-proxy` no longer decides anything itself, only orchestrates
 and forwards. Full workspace suite: 103 passed, 0 failed.
 
+### Phase 5c — ship packages and a demo workflow (done)
+Two additions, both ops/tooling rather than `core`/`apps` design — using the
+`ens` CLI (`ens build`/`ens pack`/`ens workflow`) already established
+elsewhere in this monorepo (`.ensemble/`), not anything bespoke.
+
+**`source/ship/{guard/proxy,guard/fake-service,judge/server}/Dockerfile`** —
+each a minimal `denoland/deno:alpine` image that `COPY --from=artifacts
+<app>/main.js` (the bundle `ens build <app>` produces, via the `deno.bundle`
+build kit registered per-app in `.ensemble/config.yaml`) and `CMD`s the
+app's own permission set from its `deno.json` `start` task exactly (no
+blanket `-A`). `ens pack <app> docker` builds each into `<app>:latest`.
+Verified by packing all three and running them as real containers on a
+shared Docker network, confirming inter-container routing and the reject
+path — see the fake-service Dockerfile addition and Phase 5b's own
+verification for the other two.
+
+**`workflows/demo/`** — a Terraform config (`terraform/main.tf`, using the
+`ritaj/dockercompose` provider) plus `workflow.yml`, bringing all three
+ship images up together as one `dockercompose_stack` for manual testing.
+Deliberately modeled on `workflows/deploy/` (same provider, same
+`dockercompose_stack`/`service`/`volume`/`network` shape, same
+`ENSEMBLE_WORKSPACE`-relative `run:` steps) but flattened: one stack, no
+`infrastructure`/`services` module split, no per-environment `contexts/` —
+this exists only for local manual testing, not a real deployment target.
+
+- `up` job: `ens build`/`ens pack ... docker` for all three apps, `terraform
+  apply`, then seeds `judge-server`'s KV-backed `PolicyRegistry` with the
+  `demo.home.visit` association its policy needs (judge-server never
+  bootstraps this itself — see Phase 4c — so without this step `?vip=true`
+  could never allow, only ever fall back to deny).
+- `down` job: `terraform destroy`. Deliberately does **not** set
+  `remove_volumes_on_destroy = true` on the stack — the `judge-kv` volume
+  survives teardown by default, which is fine since the seed step is
+  idempotent (`associate()` is a no-op if already present).
+- `up`/`down` have no `needs:` relationship, so both must always be invoked
+  with an explicit `--job` (`ens workflow demo --job up` / `--job down`) —
+  a bare `ens workflow demo` would run every job with no dependency
+  relationship concurrently, per `@ensemble/workflow`'s own semantics.
+- `source/apps/guard/demo/` (manifest, policy bundle, 403 page) is
+  bind-mounted read-only into the containers that need it, rather than
+  baked into the images — editing those fixtures doesn't require a rebuild,
+  only source changes to the apps themselves do.
+
+`dockercompose_stack.service` has no `build` attribute (confirmed directly
+from the provider's own schema via `terraform providers schema -json`) —
+only `image`, required — which is why the images have to exist first
+(`ens pack`) rather than the stack building them itself.
+
+Verified end-to-end via the actual `ens workflow demo --job up`/`--job down`
+commands (not just the underlying Dockerfiles/Terraform in isolation): real
+`curl` calls against all three running containers confirmed the same
+deny/allow/direct-judge-server behavior proven manually in Phase 5b, and
+`--job down` confirmed full teardown (containers and network gone; the
+volume intentionally left, per above).
+
 ### Phase 7 — error handling & failure modes
 Still not addressed: `Guard.execute()` has no failure handling — if
 `ActionResolver.resolve()`, `PolicyRepository.findPoliciesFor()`,

@@ -1,0 +1,80 @@
+jobs:
+  up:
+    steps:
+      - name: build_fake_service
+        run: |
+          set -euo pipefail
+          cd "$ENSEMBLE_WORKSPACE"
+          ens build guard/fake-service
+
+      - name: build_guard_proxy
+        run: |
+          set -euo pipefail
+          cd "$ENSEMBLE_WORKSPACE"
+          ens build guard/proxy
+
+      - name: build_judge_server
+        run: |
+          set -euo pipefail
+          cd "$ENSEMBLE_WORKSPACE"
+          ens build judge/server
+
+      - name: pack_fake_service
+        run: |
+          set -euo pipefail
+          cd "$ENSEMBLE_WORKSPACE"
+          ens pack guard/fake-service docker
+
+      - name: pack_guard_proxy
+        run: |
+          set -euo pipefail
+          cd "$ENSEMBLE_WORKSPACE"
+          ens pack guard/proxy docker
+
+      - name: pack_judge_server
+        run: |
+          set -euo pipefail
+          cd "$ENSEMBLE_WORKSPACE"
+          ens pack judge/server docker
+
+      - name: terraform_apply
+        run: |
+          set -euo pipefail
+          cd "$ENSEMBLE_WORKSPACE/workflows/demo/terraform"
+          export TF_VAR_workspace="$ENSEMBLE_WORKSPACE"
+          terraform init -input=false
+          terraform apply -auto-approve
+
+      # demo.home.visit's association is not seeded by judge-server itself
+      # (see source/core/PLAN.md's Phase 4c — associations are written by
+      # whatever process owns that integration concern, judge-server only
+      # ever reads/serves them) — without this, ?vip=true can never allow,
+      # only ever fall back to deny.
+      - name: seed_policy_registry
+        run: |
+          set -euo pipefail
+          docker exec mithaq-demo-judge-server deno eval --unstable-kv "
+          const kv = await Deno.openKv('/kv/policies.db')
+          await kv.set(['policies', 'demo.home.visit', 'demo.home.visit'], true)
+          kv.close()
+          "
+
+      - name: summary
+        run: |
+          set -euo pipefail
+          echo "Demo stack is up:"
+          echo "  http://localhost:9200/            -- rejected (no vip)"
+          echo "  http://localhost:9200/?vip=true    -- allowed, proxied to fake-service"
+          echo "  http://localhost:9300/decide       -- judge-server, direct (not public in a real deploy)"
+          echo "  http://localhost:9100/             -- fake-service, direct"
+          echo
+          echo "Run \`ens workflow demo -j down\` to tear the stack down."
+
+  down:
+    steps:
+      - name: terraform_destroy
+        run: |
+          set -euo pipefail
+          cd "$ENSEMBLE_WORKSPACE/workflows/demo/terraform"
+          export TF_VAR_workspace="$ENSEMBLE_WORKSPACE"
+          terraform destroy -auto-approve

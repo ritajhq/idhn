@@ -1,5 +1,7 @@
 build:
   guard/proxy:
     kit: deno.bundle
+  guard/fake-service:
+    kit: deno.bundle
   judge/server:
     kit: deno.bundle
