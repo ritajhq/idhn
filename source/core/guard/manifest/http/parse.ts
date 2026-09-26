@@ -1,6 +1,7 @@
 import {
   expectArray,
   expectBoolean,
+  expectFactName,
   expectObject,
   expectOneOf,
   expectRegoSafeActionName,
@@ -81,7 +82,7 @@ function parseHeaderCriterion(raw: unknown, path: string): HeaderCriterion {
 function parseExtractEntry(raw: unknown, path: string): ExtractEntry {
   const obj = expectObject(raw, path)
   const from = parseFrom(obj.from, `${path}.from`)
-  const as = expectString(obj.as, `${path}.as`)
+  const as = expectFactName(obj.as, `${path}.as`)
   const optional = obj.optional === undefined
     ? undefined
     : expectBoolean(obj.optional, `${path}.optional`)

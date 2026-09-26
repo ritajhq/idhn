@@ -1,4 +1,5 @@
 import { parse as parseYaml } from '@std/yaml'
+import * as Access from '@idhn/access'
 import type { Enricher } from '../enricher.ts'
 import { Chain } from './chain.ts'
 import { HttpLookup, type HttpLookupDefinition } from './http-lookup.ts'
@@ -43,7 +44,7 @@ export class Source {
     const lookup = this.expectObject(raw, path)
     const http = this.expectObject(lookup.http, `${path}.http`)
     return {
-      as: this.expectString(lookup.as, `${path}.as`),
+      as: this.expectFactName(lookup.as, `${path}.as`),
       actions: lookup.actions === undefined
         ? undefined
         : this.expectArray(lookup.actions, `${path}.actions`).map((
@@ -82,6 +83,16 @@ export class Source {
       throw new InvalidDefinitionError(`${path} must be a non-empty string`)
     }
     return raw
+  }
+
+  private expectFactName(raw: unknown, path: string): string {
+    const value = this.expectString(raw, path)
+    if (value === Access.Identity.FACT) {
+      throw new InvalidDefinitionError(
+        `${path} must not be "${Access.Identity.FACT}": that fact is reserved for the identity authentication reports`,
+      )
+    }
+    return value
   }
 
   private expectBoolean(raw: unknown, path: string): boolean {

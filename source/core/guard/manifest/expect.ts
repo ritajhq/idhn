@@ -1,3 +1,5 @@
+import * as Access from '@idhn/access'
+
 export class ManifestParseError extends Error {}
 
 /**
@@ -75,4 +77,15 @@ export function expectOneOf<T extends string>(
     )
   }
   return raw as T
+}
+
+/** A fact name a manifest may extract into: any non-empty string except the reserved `auth`, which only authentication writes. */
+export function expectFactName(raw: unknown, path: string): string {
+  const value = expectString(raw, path)
+  if (value === Access.Identity.FACT) {
+    throw new ManifestParseError(
+      `${path} must not be "${Access.Identity.FACT}": that fact is reserved for the identity authentication reports`,
+    )
+  }
+  return value
 }

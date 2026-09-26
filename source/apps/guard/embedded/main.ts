@@ -1,4 +1,4 @@
-import { loadManifestFile, RejectResponses } from '@idhn/guard'
+import { Authenticators, loadManifestFile, RejectResponses } from '@idhn/guard'
 import * as Judge from '@idhn/judge'
 import * as OPA from '@idhn/opa'
 import * as Policy from '@idhn/policy'
@@ -25,6 +25,14 @@ const judge = new Judge.Local(
   new Judge.DenyOverridesStrategy(new Judge.Decision(false)),
   enricher,
 )
-const server = new Server(manifest, judge, config.upstreamUrl, rejectResponse)
+const authentication = new Authenticators.Anonymous()
+
+const server = new Server(
+  manifest,
+  judge,
+  authentication,
+  config.upstreamUrl,
+  rejectResponse,
+)
 
 Deno.serve({ port: config.port }, (request) => server.handle(request))

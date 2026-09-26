@@ -1,4 +1,5 @@
 import {
+  type Authenticators,
   Guard,
   type HttpManifest,
   HttpManifestActionResolver,
@@ -9,7 +10,7 @@ import type * as Judge from '@idhn/judge'
 
 /**
  * The standalone guard's request handling: for each incoming request, builds
- * an action resolver and a service provider around it and runs `Guard`
+ * an action resolver, an authenticator and a service provider around it and runs `Guard`
  * against the injected `Judge`. Every collaborator is handed in already
  * built — deciding which ones to use (here, a client to the separate,
  * non-public-facing judge-server) is `main.ts`'s job.
@@ -18,6 +19,7 @@ export class Server {
   constructor(
     private readonly manifest: HttpManifest,
     private readonly judge: Judge.Behavior,
+    private readonly authentication: Authenticators.Scheme,
     private readonly upstreamUrl: URL,
     private readonly rejectResponse: RejectResponse,
   ) {}
@@ -35,7 +37,12 @@ export class Server {
       resolve,
       this.rejectResponse,
     )
-    const guard = new Guard(this.judge, actionResolver, serviceProvider)
+    const guard = new Guard(
+      this.judge,
+      actionResolver,
+      this.authentication.authenticatorFor(request),
+      serviceProvider,
+    )
 
     await guard.execute()
     return await promise

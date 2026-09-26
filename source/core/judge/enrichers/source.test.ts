@@ -49,6 +49,24 @@ Deno.test('Source.load: rejects a lookup without an http url', async () => {
   }
 })
 
+Deno.test('Source.load: rejects a lookup that would write the reserved auth fact', async () => {
+  const path = await Deno.makeTempFile({ suffix: '.yaml' })
+  try {
+    await Deno.writeTextFile(
+      path,
+      'lookups:\n  - as: auth\n    http: { url: http://x.internal }\n',
+    )
+
+    await assertRejects(
+      () => new Source(path).load(),
+      InvalidDefinitionError,
+      'reserved',
+    )
+  } finally {
+    await Deno.remove(path)
+  }
+})
+
 Deno.test('Source.load: yields an enricher that leaves the context untouched when no path is configured', async () => {
   const enricher = await new Source(undefined).load()
   const context = new Access.Context({ subject: 'alice' })

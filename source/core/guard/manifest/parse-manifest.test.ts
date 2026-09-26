@@ -167,6 +167,27 @@ Deno.test('parseManifest: rejects an extract entry with no "as"', () => {
   )
 })
 
+Deno.test('parseManifest: rejects an extract entry that writes the reserved auth fact', () => {
+  assertThrows(
+    () =>
+      parseManifest({
+        id: 'x',
+        actions: [
+          {
+            name: 'a',
+            match: { method: 'GET', path: '/a' },
+            extract: [{
+              from: { property: 'header', using: 'x-auth' },
+              as: 'auth',
+            }],
+          },
+        ],
+      }),
+    ManifestParseError,
+    'reserved',
+  )
+})
+
 Deno.test('parseManifest: rejects a hyphenated id (invalid Rego package segment)', () => {
   assertThrows(
     () => parseManifest({ id: 'billing-service', actions: [] }),
