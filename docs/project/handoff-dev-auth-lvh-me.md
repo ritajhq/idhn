@@ -1,7 +1,7 @@
 # Handoff: share the portal's session cookie with the guard in dev via lvh.me
 
 For a local session that can reach both repositories: idhn (this one, branch
-`claude/dreamy-fermi-3rgyv3`) and the portal (`/home/duesabati/ritaj/portal`).
+`feat/guard-authentication`) and the portal (`/home/duesabati/ritaj/portal`).
 Read [handoff.md](handoff.md) and the "Who is asking: authentication" section of
 [overview.md](overview.md) first.
 
