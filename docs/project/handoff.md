@@ -152,11 +152,8 @@ plugin, and no other portal service validates a session yet.
   answers. There is no logging convention in the repo yet.
 - One reject page serves every status; a service may want a sign-in page for
   `401` and a retry page for `503`.
-- The dev cookie workaround: the simplest is multi-label hostnames sharing a
-  parent domain (`/etc/hosts` entries like `auth.portal.test` and
-  `dashboard.portal.test`, or `*.lvh.me`) with `AUTH_COOKIE_DOMAIN` set to it,
-  which needs no code change and matches production. The alternatives are
-  proxying `/api/auth` through the guarded app's own host, or a bearer scheme.
+- The dev cookie issue: the chosen fix is serving dev under `lvh.me`, see
+  [handoff-dev-auth-lvh-me.md](handoff-dev-auth-lvh-me.md).
 - The session cache sweeps expired entries on each insert. That is linear in the
   entries of the last `ttl_seconds`, which is fine for short TTLs; a longer TTL
   would want a bounded cache. `HttpLookup`'s cache never evicts at all.
