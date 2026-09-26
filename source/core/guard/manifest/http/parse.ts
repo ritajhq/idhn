@@ -18,6 +18,7 @@ import type {
   HttpManifestAction,
   Match,
 } from './schema.ts'
+import { parseHttpAuthentication } from './parse-authentication.ts'
 
 const BODY_TYPES: readonly BodyType[] = ['json', 'form', 'text']
 const FROM_PROPERTIES: readonly FromProperty[] = [
@@ -132,5 +133,9 @@ export function parseHttpManifest(
     action,
     index,
   ) => parseAction(action, `manifest.actions[${index}]`))
-  return { protocol: 'http', id, actions }
+  const authentication = parseHttpAuthentication(
+    root.authentication,
+    'manifest.authentication',
+  )
+  return { protocol: 'http', id, authentication, actions }
 }

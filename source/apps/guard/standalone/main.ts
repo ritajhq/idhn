@@ -11,7 +11,9 @@ const rejectResponse = await new RejectResponses.Source(
   config.rejectResponseUrl,
 ).load()
 
-const authentication = new Authenticators.Anonymous()
+const authentication = new Authenticators.Schemes({
+  none: () => new Authenticators.Anonymous(),
+}).for(manifest.authentication)
 
 const server = new Server(
   manifest,

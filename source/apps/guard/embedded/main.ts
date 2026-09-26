@@ -25,7 +25,9 @@ const judge = new Judge.Local(
   new Judge.DenyOverridesStrategy(new Judge.Decision(false)),
   enricher,
 )
-const authentication = new Authenticators.Anonymous()
+const authentication = new Authenticators.Schemes({
+  none: () => new Authenticators.Anonymous(),
+}).for(manifest.authentication)
 
 const server = new Server(
   manifest,

@@ -241,3 +241,31 @@ Deno.test('parseManifest: rejects an unknown protocol', () => {
     'manifest.protocol must be one of: http',
   )
 })
+
+Deno.test('parseManifest: authenticates no one when no authentication is declared', () => {
+  assertEquals(parseManifest(validRaw).authentication, { scheme: 'none' })
+})
+
+Deno.test('parseManifest: accepts an explicit none scheme', () => {
+  assertEquals(
+    parseManifest({ ...validRaw, authentication: { scheme: 'none' } })
+      .authentication,
+    { scheme: 'none' },
+  )
+})
+
+Deno.test('parseManifest: rejects an authentication block that is not an object', () => {
+  assertThrows(
+    () => parseManifest({ ...validRaw, authentication: 'session-cookie' }),
+    ManifestParseError,
+    'manifest.authentication must be an object',
+  )
+})
+
+Deno.test('parseManifest: rejects an unknown authentication scheme', () => {
+  assertThrows(
+    () => parseManifest({ ...validRaw, authentication: { scheme: 'magic' } }),
+    ManifestParseError,
+    'manifest.authentication.scheme must be one of',
+  )
+})

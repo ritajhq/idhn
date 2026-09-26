@@ -38,9 +38,30 @@ export interface HttpManifestAction {
   extract?: ExtractEntry[]
 }
 
+/** The authentication of a service that authenticates no one: every request is anonymous. The default when a manifest declares none. */
+export interface NoAuthentication {
+  scheme: 'none'
+}
+
+/**
+ * Every authentication scheme an HTTP manifest can declare, mapped to its
+ * settings. A new scheme adds one entry here and one settings parser in
+ * `parse-authentication.ts`; `main.ts` decides whether a deployment supports
+ * it. Settings are non-secret by design — secrets never go in a manifest.
+ */
+export interface HttpAuthentications {
+  none: NoAuthentication
+}
+
+export type HttpAuthenticationScheme = keyof HttpAuthentications
+
+/** The one authentication scheme a service declares, with its settings. */
+export type HttpAuthentication = HttpAuthentications[HttpAuthenticationScheme]
+
 /** A service's declared actions: how to recognize them from an HTTP request, and what context to extract. */
 export interface HttpManifest {
   protocol: 'http'
   id: string
+  authentication: HttpAuthentication
   actions: HttpManifestAction[]
 }

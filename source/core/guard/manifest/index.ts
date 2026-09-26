@@ -4,9 +4,13 @@ export type {
   From,
   FromProperty,
   HeaderCriterion,
+  HttpAuthentication,
+  HttpAuthentications,
+  HttpAuthenticationScheme,
   HttpManifest,
   HttpManifestAction,
   Match,
+  NoAuthentication,
 } from './http/schema.ts'
 export type { Manifest, Protocol, ProtocolManifests } from './schema.ts'
 export { ManifestParseError, parseManifest } from './parse-manifest.ts'
