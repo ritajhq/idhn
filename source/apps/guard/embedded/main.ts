@@ -2,10 +2,11 @@ import { Authenticators, loadManifestFile, RejectResponses } from '@idhn/guard'
 import * as Judge from '@idhn/judge'
 import * as OPA from '@idhn/opa'
 import * as Policy from '@idhn/policy'
-import { loadConfig } from './config.ts'
+import * as Environment from '@idhn/environment'
+import { ConfigLoader } from './config.ts'
 import { Server } from './server.ts'
 
-const config = loadConfig()
+const config = new ConfigLoader(new Environment.Reader(Deno.env)).load()
 
 const manifest = await loadManifestFile(config.manifestPath, 'http')
 const rejectResponse = await new RejectResponses.Source(

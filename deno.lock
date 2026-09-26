@@ -199,6 +199,11 @@
           "jsr:@std/assert@1.0.14"
         ]
       },
+      "source/libs/environment": {
+        "dependencies": [
+          "jsr:@std/assert@1.0.14"
+        ]
+      },
       "source/libs/ui": {
         "dependencies": [
           "npm:@base-ui/react@1.6.0",

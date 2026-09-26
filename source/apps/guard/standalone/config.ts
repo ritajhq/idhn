@@ -1,3 +1,5 @@
+import type * as Environment from '@idhn/environment'
+
 export interface Config {
   manifestPath: string
   judgeServerUrl: URL
@@ -6,63 +8,19 @@ export interface Config {
   rejectResponseUrl: URL | undefined
 }
 
-/** The slice of `Deno.Env` `loadConfig` actually needs, so tests can supply a lightweight fake. */
-export interface EnvReader {
-  get(name: string): string | undefined
-}
-
-export class ConfigError extends Error {}
-
 const DEFAULT_PORT = 8080
 
-/** Reads and validates the server's configuration from environment variables. Throws `ConfigError` on any missing or invalid value. */
-export function loadConfig(env: EnvReader = Deno.env): Config {
-  return {
-    manifestPath: requireEnv(env, 'SERVICE_MANIFEST_PATH'),
-    judgeServerUrl: requireUrl(env, 'JUDGE_SERVER_URL'),
-    upstreamUrl: requireUrl(env, 'UPSTREAM_URL'),
-    port: readPort(env, 'PROXY_PORT'),
-    rejectResponseUrl: readOptionalUrl(env, 'REJECT_RESPONSE_URL'),
-  }
-}
+/** Builds the server's configuration from the environment. Throws `Environment.InvalidError` on any missing or invalid value. */
+export class ConfigLoader {
+  constructor(private readonly environment: Environment.Reader) {}
 
-function requireEnv(env: EnvReader, name: string): string {
-  const value = env.get(name)
-  if (value === undefined || value.length === 0) {
-    throw new ConfigError(`${name} must be set`)
+  load(): Config {
+    return {
+      manifestPath: this.environment.requireString('SERVICE_MANIFEST_PATH'),
+      judgeServerUrl: this.environment.requireUrl('JUDGE_SERVER_URL'),
+      upstreamUrl: this.environment.requireUrl('UPSTREAM_URL'),
+      port: this.environment.port('PROXY_PORT', DEFAULT_PORT),
+      rejectResponseUrl: this.environment.optionalUrl('REJECT_RESPONSE_URL'),
+    }
   }
-  return value
-}
-
-function requireUrl(env: EnvReader, name: string): URL {
-  const value = requireEnv(env, name)
-  return parseUrl(value, name)
-}
-
-function readOptionalUrl(env: EnvReader, name: string): URL | undefined {
-  const value = env.get(name)
-  if (value === undefined || value.length === 0) {
-    return undefined
-  }
-  return parseUrl(value, name)
-}
-
-function parseUrl(value: string, name: string): URL {
-  try {
-    return new URL(value)
-  } catch {
-    throw new ConfigError(`${name} must be a valid URL, got "${value}"`)
-  }
-}
-
-function readPort(env: EnvReader, name: string): number {
-  const value = env.get(name)
-  if (value === undefined || value.length === 0) {
-    return DEFAULT_PORT
-  }
-  const port = Number(value)
-  if (!Number.isInteger(port) || port <= 0 || port > 65535) {
-    throw new ConfigError(`${name} must be a valid port number, got "${value}"`)
-  }
-  return port
 }

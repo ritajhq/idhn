@@ -1,9 +1,10 @@
 import * as Judge from '@idhn/judge'
 import * as OPA from '@idhn/opa'
 import * as Policy from '@idhn/policy'
-import { loadConfig } from './config.ts'
+import * as Environment from '@idhn/environment'
+import { ConfigLoader } from './config.ts'
 
-const config = loadConfig()
+const config = new ConfigLoader(new Environment.Reader(Deno.env)).load()
 
 /**
  * Rego bundle file.
