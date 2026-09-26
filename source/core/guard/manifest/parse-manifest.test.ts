@@ -269,3 +269,82 @@ Deno.test('parseManifest: rejects an unknown authentication scheme', () => {
     'manifest.authentication.scheme must be one of',
   )
 })
+
+Deno.test('parseManifest: parses session-cookie settings, defaulting what is left out', () => {
+  const manifest = parseManifest({
+    ...validRaw,
+    authentication: {
+      scheme: 'session-cookie',
+      session_url: 'http://auth.internal/api/auth/get-session',
+    },
+  })
+
+  assertEquals(manifest.authentication, {
+    scheme: 'session-cookie',
+    sessionUrl: 'http://auth.internal/api/auth/get-session',
+    cookie: 'better-auth.session_token',
+    issuer: 'http://auth.internal',
+    claims: ['username', 'email', 'name', 'emailVerified'],
+    ttlSeconds: 5,
+  })
+})
+
+Deno.test('parseManifest: parses fully-specified session-cookie settings', () => {
+  const manifest = parseManifest({
+    ...validRaw,
+    authentication: {
+      scheme: 'session-cookie',
+      session_url: 'https://auth.example.com/api/auth/get-session',
+      cookie: '__Secure-better-auth.session_token',
+      issuer: 'portal',
+      claims: ['username'],
+      ttl_seconds: 0,
+    },
+  })
+
+  assertEquals(manifest.authentication, {
+    scheme: 'session-cookie',
+    sessionUrl: 'https://auth.example.com/api/auth/get-session',
+    cookie: '__Secure-better-auth.session_token',
+    issuer: 'portal',
+    claims: ['username'],
+    ttlSeconds: 0,
+  })
+})
+
+Deno.test('parseManifest: rejects session-cookie settings without a valid session_url', () => {
+  assertThrows(
+    () =>
+      parseManifest({
+        ...validRaw,
+        authentication: { scheme: 'session-cookie' },
+      }),
+    ManifestParseError,
+    'manifest.authentication.session_url',
+  )
+  assertThrows(
+    () =>
+      parseManifest({
+        ...validRaw,
+        authentication: { scheme: 'session-cookie', session_url: 'not a url' },
+      }),
+    ManifestParseError,
+    'must be a valid URL',
+  )
+})
+
+Deno.test('parseManifest: rejects a negative session-cookie ttl_seconds', () => {
+  assertThrows(
+    () =>
+      parseManifest({
+        ...validRaw,
+        authentication: {
+          scheme: 'session-cookie',
+          session_url: 'http://auth.internal/api/auth/get-session',
+          ttl_seconds: -1,
+        },
+      }),
+    ManifestParseError,
+    'ttl_seconds',
+  )
+})

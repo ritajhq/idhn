@@ -64,6 +64,21 @@ export function expectBoolean(raw: unknown, path: string): boolean {
   return raw
 }
 
+export function expectUrl(raw: unknown, path: string): string {
+  const value = expectString(raw, path)
+  if (!URL.canParse(value)) {
+    throw new ManifestParseError(`${path} must be a valid URL (got "${value}")`)
+  }
+  return value
+}
+
+export function expectNonNegativeNumber(raw: unknown, path: string): number {
+  if (typeof raw !== 'number' || !Number.isFinite(raw) || raw < 0) {
+    throw new ManifestParseError(`${path} must be a non-negative number`)
+  }
+  return raw
+}
+
 export function expectOneOf<T extends string>(
   raw: unknown,
   allowed: readonly T[],

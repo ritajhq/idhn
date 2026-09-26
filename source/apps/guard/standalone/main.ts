@@ -13,6 +13,7 @@ const rejectResponse = await new RejectResponses.Source(
 
 const authentication = new Authenticators.Schemes({
   none: () => new Authenticators.Anonymous(),
+  'session-cookie': (settings) => new Authenticators.SessionCookie(settings),
 }).for(manifest.authentication)
 
 const server = new Server(

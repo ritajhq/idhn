@@ -44,6 +44,26 @@ export interface NoAuthentication {
 }
 
 /**
+ * A session carried in a cookie and kept server-side by an auth server
+ * (BetterAuth, for one): the session cookie is forwarded to `sessionUrl`,
+ * which answers with the session's user, or with `null` when there is no
+ * valid session.
+ */
+export interface SessionCookieAuthentication {
+  scheme: 'session-cookie'
+  /** The auth server's session endpoint, e.g. BetterAuth's `GET /api/auth/get-session`. */
+  sessionUrl: string
+  /** The session cookie's name. A request without it is anonymous and costs no lookup. */
+  cookie: string
+  /** Who vouches for the identity, reported as `auth.issuer`. */
+  issuer: string
+  /** The user fields copied into `auth.claims`. The user's `id` is always `auth.subject`. */
+  claims: readonly string[]
+  /** How long an answer may be reused for the same cookie. The cost is revocation lag. `0` disables caching. */
+  ttlSeconds: number
+}
+
+/**
  * Every authentication scheme an HTTP manifest can declare, mapped to its
  * settings. A new scheme adds one entry here and one settings parser in
  * `parse-authentication.ts`; `main.ts` decides whether a deployment supports
@@ -51,6 +71,7 @@ export interface NoAuthentication {
  */
 export interface HttpAuthentications {
   none: NoAuthentication
+  'session-cookie': SessionCookieAuthentication
 }
 
 export type HttpAuthenticationScheme = keyof HttpAuthentications

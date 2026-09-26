@@ -11,6 +11,7 @@ export type {
   HttpManifestAction,
   Match,
   NoAuthentication,
+  SessionCookieAuthentication,
 } from './http/schema.ts'
 export type { Manifest, Protocol, ProtocolManifests } from './schema.ts'
 export { ManifestParseError, parseManifest } from './parse-manifest.ts'
