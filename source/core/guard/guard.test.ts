@@ -5,6 +5,7 @@ import * as Policy from '@idhn/policy'
 import type { ActionResolver, ResolvedAction } from './action-resolver.ts'
 import type { Authenticator } from './authenticator.ts'
 import { Guard } from './guard.ts'
+import { Rejection, REJECTION_FOR_IDENTITY } from './rejection.ts'
 import type { ServiceProvider } from './service-provider.ts'
 
 class FakeActionResolver implements ActionResolver {
@@ -23,6 +24,10 @@ class FakeAuthenticator implements Authenticator {
   authenticate(): Promise<Access.Identity> {
     this.calls++
     return Promise.resolve(this.identity)
+  }
+
+  rejectionFor(identity: Access.Identity): Rejection {
+    return REJECTION_FOR_IDENTITY[identity.status]
   }
 }
 
@@ -61,15 +66,15 @@ class FakePolicyEngine implements Policy.Engine {
 }
 
 class RecordingServiceProvider implements ServiceProvider {
-  calls: Array<'forward' | 'reject'> = []
+  calls: Array<'forward' | Rejection> = []
 
   forward(): Promise<void> {
     this.calls.push('forward')
     return Promise.resolve()
   }
 
-  reject(): Promise<void> {
-    this.calls.push('reject')
+  reject(rejection: Rejection): Promise<void> {
+    this.calls.push(rejection)
     return Promise.resolve()
   }
 }
@@ -108,19 +113,40 @@ Deno.test('Guard.execute: forwards when the judge allows', async () => {
   assertEquals(serviceProvider.calls, ['forward'])
 })
 
-Deno.test('Guard.execute: rejects when the judge denies', async () => {
+async function rejectionFor(identity: Access.Identity): Promise<unknown[]> {
   const serviceProvider = new RecordingServiceProvider()
   const { judge } = judgeAlwaysReturning(Policy.Verdict.Deny)
   const guard = new Guard(
     judge,
     new FakeActionResolver(resolvedAction),
-    new FakeAuthenticator(Access.Identity.anonymous()),
+    new FakeAuthenticator(identity),
     serviceProvider,
   )
 
   await guard.execute()
+  return serviceProvider.calls
+}
 
-  assertEquals(serviceProvider.calls, ['reject'])
+Deno.test('Guard.execute: rejects an authenticated caller the judge denies as forbidden', async () => {
+  assertEquals(
+    await rejectionFor(Access.Identity.authenticated('u-1', 'portal')),
+    [Rejection.Forbidden],
+  )
+})
+
+Deno.test('Guard.execute: rejects an anonymous or invalid caller the judge denies as unauthenticated', async () => {
+  assertEquals(await rejectionFor(Access.Identity.anonymous()), [
+    Rejection.Unauthenticated,
+  ])
+  assertEquals(await rejectionFor(Access.Identity.invalid()), [
+    Rejection.Unauthenticated,
+  ])
+})
+
+Deno.test('Guard.execute: rejects a caller whose identity could not be checked as unavailable', async () => {
+  assertEquals(await rejectionFor(Access.Identity.unavailable()), [
+    Rejection.Unavailable,
+  ])
 })
 
 Deno.test('Guard.execute: rejects without consulting the judge when no action is resolved', async () => {
@@ -136,7 +162,7 @@ Deno.test('Guard.execute: rejects without consulting the judge when no action is
 
   await guard.execute()
 
-  assertEquals(serviceProvider.calls, ['reject'])
+  assertEquals(serviceProvider.calls, [Rejection.Forbidden])
   assertEquals(repository.calls, 0)
   assertEquals(authenticator.calls, 0)
 })
@@ -168,20 +194,24 @@ Deno.test('Guard.execute: hands the judge the identity as the auth fact, next to
 })
 
 Deno.test('Guard.execute: still asks the judge when authentication finds no identity, leaving the call to the policies', async () => {
-  const serviceProvider = new RecordingServiceProvider()
-  const judge = new ContextCapturingJudge()
-  const guard = new Guard(
-    judge,
-    new FakeActionResolver(resolvedAction),
-    new FakeAuthenticator(Access.Identity.invalid()),
-    serviceProvider,
-  )
+  for (
+    const identity of [
+      Access.Identity.invalid(),
+      Access.Identity.unavailable(),
+    ]
+  ) {
+    const serviceProvider = new RecordingServiceProvider()
+    const judge = new ContextCapturingJudge()
+    const guard = new Guard(
+      judge,
+      new FakeActionResolver(resolvedAction),
+      new FakeAuthenticator(identity),
+      serviceProvider,
+    )
 
-  await guard.execute()
+    await guard.execute()
 
-  assertEquals(judge.received[0].facts.auth, {
-    status: 'invalid',
-    claims: {},
-  })
-  assertEquals(serviceProvider.calls, ['forward'])
+    assertEquals(judge.received[0].facts.auth, identity.toFact())
+    assertEquals(serviceProvider.calls, ['forward'])
+  }
 })

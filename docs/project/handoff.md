@@ -121,9 +121,17 @@ plugin, and no other portal service validates a session yet.
   what lets the adapter tell "no credential" (anonymous, no lookup) from "a
   credential the auth server rejects" (invalid), keeps other cookies away from
   the auth server, and makes the cache key the token alone.
-- **Auth server failures throw `AuthenticationError`** (fail closed, the process
-  answers 500), the same way a non-optional enrichment lookup fails. See the
-  open items.
+- **An auth server outage is an `unavailable` identity**, not an error: public
+  actions keep working and anything that needs an identity is denied, answered
+  `503`.
+- **401 versus 403 comes from the identity, not the policies**: a denied caller
+  without a valid identity gets `401`, an authenticated one `403`. The
+  `Authenticator` decides (`rejectionFor(identity)`), so the `none` scheme,
+  which no caller can authenticate with, always answers `403`.
+  `ServiceProvider.reject` now takes the `Rejection`, and
+  `RejectResponse.toResponse` the status. The `401` carries no
+  `WWW-Authenticate` header (RFC 9110 asks for one; cookie sessions have no
+  standard challenge).
 - **Defaults**: `ttl_seconds` 5, `issuer` the origin of `session_url`, `claims`
   `[username, email, name, emailVerified]`. Missing user fields are left out of
   the claims.
@@ -140,10 +148,15 @@ plugin, and no other portal service validates a session yet.
   real multi-label domain (or `AUTH_COOKIE_DOMAIN`) to check.
 - The guard demo (`source/apps/guard/demo/`) does not authenticate yet; its
   manifest has no `authentication` block, so every request is anonymous.
-- An auth server outage makes every request to a `session-cookie` service answer
-  500, public actions included. Reporting `invalid` instead would keep public
-  actions up, at the cost of conflating "rejected" with "could not check". This
-  belongs with the 401 versus 403 and Phase 7 questions below.
+- An auth server outage is silent: nothing logs it, and the only sign is `503`
+  answers. There is no logging convention in the repo yet.
+- One reject page serves every status; a service may want a sign-in page for
+  `401` and a retry page for `503`.
+- The dev cookie workaround: the simplest is multi-label hostnames sharing a
+  parent domain (`/etc/hosts` entries like `auth.portal.test` and
+  `dashboard.portal.test`, or `*.lvh.me`) with `AUTH_COOKIE_DOMAIN` set to it,
+  which needs no code change and matches production. The alternatives are
+  proxying `/api/auth` through the guarded app's own host, or a bearer scheme.
 - The session cache sweeps expired entries on each insert. That is linear in the
   entries of the last `ttl_seconds`, which is fine for short TTLs; a longer TTL
   would want a bounded cache. `HttpLookup`'s cache never evicts at all.
@@ -152,8 +165,6 @@ plugin, and no other portal service validates a session yet.
   Options: ship `data.json` in the policy bundle (the Phase 10 pipeline in
   `source/core/PLAN.md`), an external sync job, or drop the data feature and use
   lookups.
-- 401 versus 403 is parked: the guard no longer knows whether authentication was
-  required.
 - A failed non-optional enrichment lookup makes judge-server answer 500 and
   `Judge.Http.Client` throw `RequestError`; how the guard treats that is the
   open Phase 7 question in `PLAN.md`.

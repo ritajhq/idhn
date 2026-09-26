@@ -9,7 +9,7 @@ Deno.test('Source.load: loads a local HTML file, inferring content-type from its
   )
     .load()
 
-  const response = rejectResponse.toResponse()
+  const response = rejectResponse.toResponse(403)
   assertEquals(response.status, 403)
   assertEquals(response.headers.get('content-type'), 'text/html; charset=utf-8')
   assertEquals(await response.text(), '<h1>Forbidden</h1>\n')
@@ -29,7 +29,7 @@ Deno.test('Source.load: loads over HTTP, using the server-supplied content-type'
     const rejectResponse = await new Source(`http://localhost:${addr.port}/`)
       .load()
 
-    const response = rejectResponse.toResponse()
+    const response = rejectResponse.toResponse(403)
     assertEquals(await response.text(), '<p>nope</p>')
     assertEquals(
       response.headers.get('content-type'),
@@ -63,7 +63,7 @@ Deno.test('Source.load: rejects when the response is not ok', async () => {
 Deno.test('Source.load: yields a bare 403 when no url is configured', async () => {
   const rejectResponse = await new Source(undefined).load()
 
-  const response = rejectResponse.toResponse()
+  const response = rejectResponse.toResponse(403)
   assertEquals(response.status, 403)
   assertEquals(await response.text(), '')
 })

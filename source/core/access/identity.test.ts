@@ -33,6 +33,13 @@ Deno.test('Identity.invalid: has no subject, issuer or claims', () => {
   assertEquals(Identity.invalid().toFact(), { status: 'invalid', claims: {} })
 })
 
+Deno.test('Identity.unavailable: has no subject, issuer or claims', () => {
+  assertEquals(Identity.unavailable().toFact(), {
+    status: 'unavailable',
+    claims: {},
+  })
+})
+
 Deno.test('Identity: claims cannot be changed after construction', () => {
   const claims: Record<string, unknown> = { username: 'alice' }
   const identity = Identity.authenticated('u-1', 'https://auth.test', claims)

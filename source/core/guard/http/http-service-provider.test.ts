@@ -1,5 +1,6 @@
 import { assertEquals } from '@std/assert'
 import { HttpServiceProvider } from './http-service-provider.ts'
+import { Rejection } from '../rejection.ts'
 import { Bare, Served } from './reject-responses/index.ts'
 
 async function withUpstream(
@@ -115,7 +116,7 @@ Deno.test('HttpServiceProvider.reject: resolves with a bare 403 when given a bar
     new Bare(),
   )
 
-  await provider.reject()
+  await provider.reject(Rejection.Forbidden)
   const response = await promise
 
   assertEquals(response.status, 403)
@@ -136,10 +137,28 @@ Deno.test('HttpServiceProvider.reject: serves the configured reject response bod
     rejectResponse,
   )
 
-  await provider.reject()
+  await provider.reject(Rejection.Forbidden)
   const response = await promise
 
   assertEquals(response.status, 403)
   assertEquals(response.headers.get('content-type'), 'text/html; charset=utf-8')
   assertEquals(await response.text(), '<h1>Forbidden</h1>')
+})
+
+Deno.test('HttpServiceProvider.reject: answers 401 for an unauthenticated caller and 503 when the identity could not be checked', async () => {
+  const statuses: number[] = []
+  for (const rejection of [Rejection.Unauthenticated, Rejection.Unavailable]) {
+    const { promise, resolve } = Promise.withResolvers<Response>()
+    const provider = new HttpServiceProvider(
+      new Request('https://gateway.test/a', { method: 'GET' }),
+      new URL('http://localhost:1/'),
+      resolve,
+      new Bare(),
+    )
+
+    await provider.reject(rejection)
+    statuses.push((await promise).status)
+  }
+
+  assertEquals(statuses, [401, 503])
 })

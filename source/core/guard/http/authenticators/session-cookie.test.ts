@@ -1,6 +1,8 @@
-import { assertEquals, assertRejects } from '@std/assert'
+import { assertEquals } from '@std/assert'
 import type { SessionCookieAuthentication } from '../../manifest/http/schema.ts'
-import { AuthenticationError, SessionCookie } from './session-cookie.ts'
+import * as Access from '@idhn/access'
+import { Rejection } from '../../rejection.ts'
+import { SessionCookie } from './session-cookie.ts'
 
 const COOKIE = 'better-auth.session_token'
 
@@ -144,51 +146,46 @@ Deno.test('SessionCookie: a session cookie the auth server does not know is inva
   )
 })
 
-Deno.test('SessionCookie: fails closed when the auth server answers with an error', async () => {
+Deno.test('SessionCookie: reports the identity as unavailable when the auth server answers with an error', async () => {
   await withAuthServer(
     () => new Response('boom', { status: 500 }),
     async (sessionUrl) => {
       const scheme = new SessionCookie(settings(sessionUrl))
 
-      await assertRejects(
-        () =>
-          scheme.authenticatorFor(requestWithCookie(`${COOKIE}=abc`))
-            .authenticate(),
-        AuthenticationError,
-        '500',
-      )
+      const identity = await scheme
+        .authenticatorFor(requestWithCookie(`${COOKIE}=abc`))
+        .authenticate()
+
+      assertEquals(identity.toFact(), { status: 'unavailable', claims: {} })
     },
   )
 })
 
-Deno.test('SessionCookie: fails closed when the auth server answers with something that is not a session', async () => {
+Deno.test('SessionCookie: reports the identity as unavailable when the auth server answers with something that is not a session', async () => {
   await withAuthServer(
     () => Response.json({ user: { name: 'no id' } }),
     async (sessionUrl) => {
       const scheme = new SessionCookie(settings(sessionUrl))
 
-      await assertRejects(
-        () =>
-          scheme.authenticatorFor(requestWithCookie(`${COOKIE}=abc`))
-            .authenticate(),
-        AuthenticationError,
-        'user id',
-      )
+      const identity = await scheme
+        .authenticatorFor(requestWithCookie(`${COOKIE}=abc`))
+        .authenticate()
+
+      assertEquals(identity.status, 'unavailable')
     },
   )
 })
 
-Deno.test('SessionCookie: fails closed when the auth server cannot be reached', async () => {
+Deno.test('SessionCookie: reports the identity as unavailable when the auth server cannot be reached', async () => {
   const scheme = new SessionCookie(
     settings('http://localhost:1/api/auth/get-session'),
   )
 
-  await assertRejects(
-    () =>
-      scheme.authenticatorFor(requestWithCookie(`${COOKIE}=abc`))
-        .authenticate(),
-    AuthenticationError,
-  )
+  const identity = await scheme
+    .authenticatorFor(requestWithCookie(`${COOKIE}=abc`))
+    .authenticate()
+
+  assertEquals(identity.status, 'unavailable')
 })
 
 Deno.test('SessionCookie: reuses an answer for the same cookie within its ttl and asks again after it expires', async () => {
@@ -242,7 +239,7 @@ Deno.test('SessionCookie: caches each cookie separately', async () => {
   )
 })
 
-Deno.test('SessionCookie: does not cache a failed lookup', async () => {
+Deno.test('SessionCookie: does not cache an unavailable identity', async () => {
   let hits = 0
   await withAuthServer(
     () => {
@@ -257,10 +254,33 @@ Deno.test('SessionCookie: does not cache a failed lookup', async () => {
         scheme.authenticatorFor(requestWithCookie(`${COOKIE}=abc`))
           .authenticate()
 
-      await assertRejects(authenticate, AuthenticationError)
+      const during = await authenticate()
       const identity = await authenticate()
+
+      assertEquals(during.status, 'unavailable')
 
       assertEquals(identity.status, 'authenticated')
     },
+  )
+})
+
+Deno.test('SessionCookie: challenges a denied caller without a valid session, and forbids an authenticated one', async () => {
+  const authenticator = new SessionCookie(
+    settings('http://localhost:1/api/auth/get-session'),
+  ).authenticatorFor(requestWithCookie())
+
+  assertEquals(
+    [
+      Access.Identity.authenticated('u-1', 'portal'),
+      Access.Identity.anonymous(),
+      Access.Identity.invalid(),
+      Access.Identity.unavailable(),
+    ].map((identity) => authenticator.rejectionFor(identity)),
+    [
+      Rejection.Forbidden,
+      Rejection.Unauthenticated,
+      Rejection.Unauthenticated,
+      Rejection.Unavailable,
+    ],
   )
 })

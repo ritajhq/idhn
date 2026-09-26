@@ -1,4 +1,6 @@
 import { assertEquals, assertInstanceOf, assertThrows } from '@std/assert'
+import * as Access from '@idhn/access'
+import { Rejection } from '../../rejection.ts'
 import { Anonymous } from './anonymous.ts'
 import { Schemes, UnsupportedSchemeError } from './schemes.ts'
 
@@ -21,5 +23,12 @@ Deno.test('Schemes.for: fails when the deployment does not support the declared 
     () => schemes.for({ scheme: 'none' }),
     UnsupportedSchemeError,
     'scheme "none" is not supported',
+  )
+})
+
+Deno.test('Anonymous: a denial is forbidden, since no one can authenticate', () => {
+  assertEquals(
+    new Anonymous().rejectionFor(Access.Identity.anonymous()),
+    Rejection.Forbidden,
   )
 })

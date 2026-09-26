@@ -1,4 +1,4 @@
-import { REJECT_STATUS, type RejectResponse } from './reject-response.ts'
+import type { RejectResponse } from './reject-response.ts'
 
 /** A rejection serving a fixed body, e.g. loaded once at startup from a configured URL. */
 export class Served implements RejectResponse {
@@ -7,9 +7,9 @@ export class Served implements RejectResponse {
     private readonly contentType: string,
   ) {}
 
-  toResponse(): Response {
+  toResponse(status: number): Response {
     return new Response(this.body, {
-      status: REJECT_STATUS,
+      status,
       headers: { 'content-type': this.contentType },
     })
   }

@@ -1,4 +1,5 @@
 import type * as Access from '@idhn/access'
+import type { Rejection } from './rejection.ts'
 
 /**
  * Finds out who is behind one incoming request. Implementations are
@@ -12,4 +13,7 @@ import type * as Access from '@idhn/access'
  */
 export interface Authenticator {
   authenticate(): Promise<Access.Identity>
+
+  /** How to answer a request the judge denied for `identity`: only a scheme a caller could authenticate with may tell it to. */
+  rejectionFor(identity: Access.Identity): Rejection
 }

@@ -1,5 +1,13 @@
-/** What authentication found on a request: a verified identity, no credential at all, or a credential that failed verification. */
-export type IdentityStatus = 'authenticated' | 'anonymous' | 'invalid'
+/**
+ * What authentication found on a request: a verified identity, no credential
+ * at all, a credential that failed verification, or a credential that could
+ * not be checked because the identity provider was unreachable.
+ */
+export type IdentityStatus =
+  | 'authenticated'
+  | 'anonymous'
+  | 'invalid'
+  | 'unavailable'
 
 /**
  * Who an attempted action is attributed to, as far as authentication could
@@ -42,6 +50,11 @@ export class Identity {
 
   static invalid(): Identity {
     return new Identity('invalid', undefined, undefined, Object.freeze({}))
+  }
+
+  /** A credential was presented but could not be checked. Policies that need an identity deny it; public ones are unaffected. */
+  static unavailable(): Identity {
+    return new Identity('unavailable', undefined, undefined, Object.freeze({}))
   }
 
   /** The plain document policies see as `input.auth`. */

@@ -94,11 +94,26 @@ as the reserved fact `auth`, which policies read as `input.auth`:
 }
 ```
 
-`status` is `authenticated`, `anonymous` (no credential presented) or `invalid`
-(a credential that failed verification); the last two carry only `status` and
-empty `claims`. Nothing else may write `auth`: the manifest parser and the
-enrichment definition reject `as: auth`, and `Context.with()` throws on any
-conflict.
+`status` is `authenticated`, `anonymous` (no credential presented), `invalid` (a
+credential that failed verification) or `unavailable` (a credential that could
+not be checked because the identity provider is down); all but the first carry
+only `status` and empty `claims`. A policy that needs a caller checks
+`input.auth.status == "authenticated"`, so an outage denies it, while a policy
+that ignores `auth` (a public page) keeps working.
+
+When the judge denies a request, the scheme's `Authenticator` says how to answer
+(`Rejection`), and the HTTP guard maps that to a status:
+
+| Caller's identity        | `session-cookie`              | `none`          |
+| ------------------------ | ----------------------------- | --------------- |
+| `authenticated`          | `403` forbidden               | —               |
+| `anonymous` or `invalid` | `401` unauthenticated         | `403` forbidden |
+| `unavailable`            | `503` unavailable (try again) | —               |
+
+A request that matches no action is always `403`. Every status serves the same
+reject page (`REJECT_RESPONSE_URL`), or an empty body. Nothing else may write
+`auth`: the manifest parser and the enrichment definition reject `as: auth`, and
+`Context.with()` throws on any conflict.
 
 A manifest declares exactly one scheme in an `authentication` block, inside its
 protocol-tagged section. The parser dispatches on `scheme` the way it does on
@@ -127,10 +142,10 @@ the schemes that deployment supports (`Authenticators.Schemes`, also where a
 future scheme would get its secrets from the environment), and startup fails
 with `UnsupportedSchemeError` if the manifest names another one.
 
-| Scheme           | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `none`           | Everyone is anonymous (`Authenticators.Anonymous`).                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `session-cookie` | A server-side session in a cookie (the portal's BetterAuth). Without the cookie the request is anonymous and costs no lookup. Otherwise only that cookie is forwarded to `session_url`: a session makes `user.id` the subject and the listed user fields the claims, `null` makes it invalid, and an error or an unreachable auth server throws `AuthenticationError` (fail closed). Answers are cached per cookie hash for `ttl_seconds`, the revocation lag. |
+| Scheme           | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `none`           | Everyone is anonymous (`Authenticators.Anonymous`).                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `session-cookie` | A server-side session in a cookie (the portal's BetterAuth). Without the cookie the request is anonymous and costs no lookup. Otherwise only that cookie is forwarded to `session_url`: a session makes `user.id` the subject and the listed user fields the claims, `null` makes it invalid, and an error, an unreachable auth server or an answer that is not a session makes it unavailable (never cached). Answers are cached per cookie hash for `ttl_seconds`, the revocation lag. |
 
 Identity providers rarely know roles or relationships, so policies should not
 hardcode usernames: use `data` (for example `data.roles[input.auth.subject]`) or

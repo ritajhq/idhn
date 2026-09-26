@@ -1,10 +1,20 @@
+import { Rejection } from '../rejection.ts'
 import type { ServiceProvider } from '../service-provider.ts'
 import type { RejectResponse } from './reject-responses/reject-response.ts'
+
+/** How each reason for rejecting a request is said in HTTP. */
+const REJECTION_STATUS: Readonly<Record<Rejection, number>> = {
+  [Rejection.Forbidden]: 403,
+  [Rejection.Unauthenticated]: 401,
+  [Rejection.Unavailable]: 503,
+}
 
 /**
  * Carries out a `Guard`'s verdict over HTTP: `forward()` reverse-proxies the
  * request to `upstream`, `reject()` answers with the injected `RejectResponse`
- * (a bare empty `403` when a service configured no custom page). Neither method returns
+ * (a bare empty body when a service configured no custom page) under the
+ * status for the rejection: `403` forbidden, `401` unauthenticated, `503`
+ * when the caller's identity could not be checked. Neither method returns
  * anything (per `ServiceProvider`'s contract) — instead, this class is
  * constructed with a `resolve` function (from `Promise.withResolvers()`)
  * that it calls with the eventual `Response`. This lets the HTTP handler
@@ -36,7 +46,9 @@ export class HttpServiceProvider implements ServiceProvider {
   }
 
   // deno-lint-ignore require-await
-  async reject(): Promise<void> {
-    this.resolve(this.rejectResponse.toResponse())
+  async reject(rejection: Rejection): Promise<void> {
+    this.resolve(
+      this.rejectResponse.toResponse(REJECTION_STATUS[rejection]),
+    )
   }
 }

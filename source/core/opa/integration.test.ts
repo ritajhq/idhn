@@ -267,3 +267,21 @@ Deno.test('Judge + OPA.PolicyEngine + auth + HttpLookup: a relationship is looke
     await managers.finished
   }
 })
+
+Deno.test('Judge + OPA.PolicyEngine + auth: when the identity cannot be checked, public actions still pass and protected ones are denied', async () => {
+  const outage = Access.Identity.unavailable()
+  const publicAction = await judgeGoverning('catalog.browse')
+  const protectedAction = await judgeGoverning('profile.read')
+
+  const onPublic = await publicAction.judge.decide(
+    publicAction.action,
+    authenticatedAs(outage),
+  )
+  const onProtected = await protectedAction.judge.decide(
+    protectedAction.action,
+    authenticatedAs(outage),
+  )
+
+  assertEquals(onPublic.allowed, true)
+  assertEquals(onProtected.allowed, false)
+})

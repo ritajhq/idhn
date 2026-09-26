@@ -1,10 +1,11 @@
 import * as Access from '@idhn/access'
 import type { Authenticator } from '../../authenticator.ts'
+import { type Rejection, REJECTION_FOR_IDENTITY } from '../../rejection.ts'
 import type { SessionCookieAuthentication } from '../../manifest/http/schema.ts'
 import type { Scheme } from './scheme.ts'
 
-/** The auth server could not be asked, or gave an answer that is not a session. Authentication fails closed: the request is not judged. */
-export class AuthenticationError extends Error {}
+/** The auth server could not be asked, or gave an answer that is not a session. Never leaves this module: it becomes an unavailable identity. */
+class SessionLookupError extends Error {}
 
 interface CachedIdentity {
   identity: Access.Identity
@@ -17,8 +18,9 @@ interface CachedIdentity {
  * with the session and its user, or with `null`. The user's `id` becomes the
  * subject, and the configured user fields become the claims. Answers are
  * cached per cookie (by its hash, never its value) for `ttlSeconds`, which is
- * how long a revoked session can still be seen as valid; failures are never
- * cached.
+ * how long a revoked session can still be seen as valid. When the auth server
+ * cannot be asked, the identity is `unavailable`: never cached, and never an
+ * error, so public actions keep working while the policies deny the rest.
  */
 export class SessionCookie implements Scheme {
   private readonly cache = new Map<string, CachedIdentity>()
@@ -32,7 +34,7 @@ export class SessionCookie implements Scheme {
     return new SessionCookieAuthenticator(request, this.settings.cookie, this)
   }
 
-  /** The identity a presented session token proves: authenticated, or invalid when the auth server knows no such session. */
+  /** The identity a presented session token proves: authenticated, invalid when the auth server knows no such session, or unavailable when it cannot say. */
   async identify(token: string): Promise<Access.Identity> {
     const key = await this.hash(token)
     const cached = this.cache.get(key)
@@ -40,9 +42,16 @@ export class SessionCookie implements Scheme {
       return cached.identity
     }
 
-    const identity = this.toIdentity(await this.fetchSession(token))
-    this.remember(key, identity)
-    return identity
+    try {
+      const identity = this.toIdentity(await this.fetchSession(token))
+      this.remember(key, identity)
+      return identity
+    } catch (error) {
+      if (!(error instanceof SessionLookupError)) {
+        throw error
+      }
+      return Access.Identity.unavailable()
+    }
   }
 
   private async fetchSession(token: string): Promise<unknown> {
@@ -52,7 +61,7 @@ export class SessionCookie implements Scheme {
         cookie: `${this.settings.cookie}=${token}`,
       },
     }).catch((error: unknown) => {
-      throw new AuthenticationError(
+      throw new SessionLookupError(
         `Session lookup at ${this.settings.sessionUrl} failed: ${
           error instanceof Error ? error.message : String(error)
         }`,
@@ -61,7 +70,7 @@ export class SessionCookie implements Scheme {
     })
     if (!response.ok) {
       await response.body?.cancel()
-      throw new AuthenticationError(
+      throw new SessionLookupError(
         `Session lookup got ${response.status} ${response.statusText} from ${
           new URL(this.settings.sessionUrl).origin
         }`,
@@ -92,7 +101,7 @@ export class SessionCookie implements Scheme {
       | Record<string, unknown>
       | undefined
     if (typeof user?.id !== 'string' || user.id.length === 0) {
-      throw new AuthenticationError(
+      throw new SessionLookupError(
         `Session lookup at ${this.settings.sessionUrl} answered with neither null nor a session with a user id`,
       )
     }
@@ -141,6 +150,11 @@ class SessionCookieAuthenticator implements Authenticator {
       return Access.Identity.anonymous()
     }
     return await this.sessions.identify(token)
+  }
+
+  /** A caller without a valid session is told to sign in (401), one whose session could not be checked to retry (503). */
+  rejectionFor(identity: Access.Identity): Rejection {
+    return REJECTION_FOR_IDENTITY[identity.status]
   }
 
   private presentedToken(): string | undefined {
