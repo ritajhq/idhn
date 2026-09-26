@@ -77,11 +77,72 @@ that pairs that resolver with a matching `ServiceProvider`.
 `loadManifestFile(path, protocol)` rejects a manifest declared for a different
 protocol than the entry point serves. Only `http` exists today.
 
+## Who is asking: authentication
+
+Authentication only **reports** who is behind a request; it never rejects one.
+Whether an action needs an authenticated caller is up to its policies. For each
+request whose action resolves, the Guard asks an `Authenticator` (a per-request
+port, like `ActionResolver`) for an `Access.Identity` and adds it to the context
+as the reserved fact `auth`, which policies read as `input.auth`:
+
+```json
+{
+  "status": "authenticated",
+  "subject": "u-1",
+  "issuer": "http://auth.internal",
+  "claims": { "username": "alice", "emailVerified": true }
+}
+```
+
+`status` is `authenticated`, `anonymous` (no credential presented) or `invalid`
+(a credential that failed verification); the last two carry only `status` and
+empty `claims`. Nothing else may write `auth`: the manifest parser and the
+enrichment definition reject `as: auth`, and `Context.with()` throws on any
+conflict.
+
+A manifest declares exactly one scheme in an `authentication` block, inside its
+protocol-tagged section. The parser dispatches on `scheme` the way it does on
+`protocol`; with no block, the scheme is `none` and every request is anonymous.
+
+```yaml
+id: dashboard
+protocol: http
+authentication:
+  scheme: session-cookie
+  session_url: http://auth.internal/api/auth/get-session # required
+  cookie: better-auth.session_token # optional; this is the default
+  issuer: portal # optional; defaults to session_url's origin
+  claims: [
+    username,
+    email,
+    name,
+    emailVerified,
+  ] # optional; these are the default
+  ttl_seconds: 5 # optional; default 5, 0 disables caching
+actions: [...]
+```
+
+Settings in the manifest are non-secret by design. Each guard's `main.ts` wires
+the schemes that deployment supports (`Authenticators.Schemes`, also where a
+future scheme would get its secrets from the environment), and startup fails
+with `UnsupportedSchemeError` if the manifest names another one.
+
+| Scheme           | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `none`           | Everyone is anonymous (`Authenticators.Anonymous`).                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `session-cookie` | A server-side session in a cookie (the portal's BetterAuth). Without the cookie the request is anonymous and costs no lookup. Otherwise only that cookie is forwarded to `session_url`: a session makes `user.id` the subject and the listed user fields the claims, `null` makes it invalid, and an error or an unreachable auth server throws `AuthenticationError` (fail closed). Answers are cached per cookie hash for `ttl_seconds`, the revocation lag. |
+
+Identity providers rarely know roles or relationships, so policies should not
+hardcode usernames: use `data` (for example `data.roles[input.auth.subject]`) or
+an enrichment lookup keyed by `{auth.subject}` for what the provider cannot say.
+The fixture policies `profile.read`, `report.view` and `place.manage` in
+`source/core/opa/tests/fixtures/` show each pattern.
+
 ## Where a policy's facts come from
 
 `Policy.Engine.evaluate` is a pure function of `(policy, context)`. It makes no
-network calls, so a policy can only use what is already in its input. There are
-three sources, from most to least static:
+network calls, so a policy can only use what is already in its input. Besides
+the `auth` fact above, there are three sources, from most to least static:
 
 1. **The request.** The manifest's `extract` entries put path, query, header,
    body or constant values into the `Context`. This happens in the Guard.
@@ -101,7 +162,7 @@ three sources, from most to least static:
          billing_service.invoice_approve,
        ] # optional; all actions if omitted
        http:
-         url: http://directory.internal/agents/{subject} # {name} is filled from a request fact
+         url: http://directory.internal/agents/{subject} # {name} is filled from a fact; {auth.subject} from a nested one
        ttl_seconds: 60 # optional; default 0 (no caching)
        optional: false # optional; default false
    ```
@@ -110,7 +171,9 @@ three sources, from most to least static:
    request fact (`ConflictingFactError`). A failed lookup or a missing
    placeholder fact throws `Judge.Enrichers.LookupError`, so the decision fails
    closed. With `optional: true` the fact is omitted instead and the policy sees
-   it as undefined. Failures are never cached.
+   it as undefined. Failures are never cached. A lookup keyed by
+   `{auth.subject}` should usually be optional, since an anonymous or invalid
+   identity has no subject.
 
 Enrichment runs inside the judge, which is on the internal network, so the
 public-facing Guard never needs credentials for those data sources.
@@ -121,11 +184,13 @@ public-facing Guard never needs credentials for those data sources.
 
 A reverse proxy that runs in front of the protected service. At startup
 ([main.ts](../../source/apps/guard/standalone/main.ts)) it loads the manifest,
-creates a `Judge.Http.Client` pointed at the judge-server, and optionally loads
-a custom reject response. For each request it builds an
-`HttpManifestActionResolver` and an `HttpServiceProvider` around the request,
-then runs `Guard.execute()`. The request is forwarded to `UPSTREAM_URL` or
-rejected.
+creates a `Judge.Http.Client` pointed at the judge-server, builds the manifest's
+authentication scheme, and optionally loads a custom reject response. For each
+request it builds an `HttpManifestActionResolver`, the scheme's `Authenticator`
+and an `HttpServiceProvider` around the request, then runs `Guard.execute()`.
+Authentication happens here, in the public process; the judge-server trusts the
+`auth` fact it is sent, which is one more reason it must stay internal. The
+request is forwarded to `UPSTREAM_URL` or rejected.
 
 | Env var                 | Required | Default | Meaning                                                      |
 | ----------------------- | -------- | ------- | ------------------------------------------------------------ |
@@ -142,11 +207,12 @@ Run it with `deno task start`. It is shipped as
 
 Does the same job as `guard/standalone`, but composes its own Judge in-process
 ([main.ts](../../source/apps/guard/embedded/main.ts): OPA engine, KV registry,
-enrichers, `Judge.Local`) instead of calling a judge-server over HTTP. That
-wiring is deliberately its own: it is not shared with `judge/server`, so each
-app decides for itself which engine, registry and enrichers to use. Because the
-policy registry's Deno KV store lives in this process, it needs `--unstable-kv`
-and write permission.
+enrichers, `Judge.Local`) instead of calling a judge-server over HTTP. It
+authenticates the same way, with the same supported schemes. That wiring is
+deliberately its own: it is not shared with `judge/server`, so each app decides
+for itself which engine, registry and enrichers to use. Because the policy
+registry's Deno KV store lives in this process, it needs `--unstable-kv` and
+write permission.
 
 | Env var                 | Required | Default         | Meaning                                     |
 | ----------------------- | -------- | --------------- | ------------------------------------------- |
@@ -224,11 +290,11 @@ none of its features are defined.
   serves. Collaborators are passed to classes through their constructors, and
   nothing creates its own infrastructure. The guards' per-request behaviour
   lives in `Server.handle(request)`, which is handed its `Judge` already built.
-  Optional collaborators (reject page, policy data, enrichment) are never
-  `undefined` past config: each has a `Source` class whose `load()` returns a
-  neutral Null Object when nothing is configured (a bare 403, an empty `data`
-  document, a `Passthrough` enricher), so `main.ts` has no branching. Apps never
-  depend on one another.
+  Optional collaborators (reject page, policy data, enrichment, authentication)
+  are never `undefined` past config: each has a `Source` class whose `load()`
+  returns a neutral Null Object when nothing is configured (a bare 403, an empty
+  `data` document, a `Passthrough` enricher, the `Anonymous` scheme), so
+  `main.ts` has no branching. Apps never depend on one another.
 - `config.ts` validates every environment variable up front and throws a
   `ConfigError` for a missing or invalid value. It reads through an `EnvReader`
   (defaulting to `Deno.env`).
