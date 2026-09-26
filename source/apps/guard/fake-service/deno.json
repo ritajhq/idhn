@@ -1,5 +1,5 @@
 {
-  "name": "@mithaq/guard-fake-service",
+  "name": "@idhn/guard-fake-service",
   "exports": "./main.ts",
   "tasks": {
     "start": "deno run --allow-net --allow-env main.ts"

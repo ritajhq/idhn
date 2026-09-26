@@ -1,5 +1,7 @@
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertRejects } from '@std/assert'
 import { loadManifestFile } from './load-manifest-file.ts'
+import { ManifestParseError } from './parse-manifest.ts'
+import type { Protocol } from './schema.ts'
 
 const fixturePath = new URL(
   './tests/fixtures/billing_service.yaml',
@@ -7,7 +9,7 @@ const fixturePath = new URL(
 )
 
 Deno.test('loadManifestFile: reads and parses a real YAML manifest file', async () => {
-  const manifest = await loadManifestFile(fixturePath)
+  const manifest = await loadManifestFile(fixturePath, 'http')
 
   assertEquals(manifest.id, 'billing_service')
   assertEquals(manifest.actions.length, 2)
@@ -21,4 +23,12 @@ Deno.test('loadManifestFile: reads and parses a real YAML manifest file', async 
     '/invoices/:id',
     '/invoices/:id/summary',
   ])
+})
+
+Deno.test('loadManifestFile: rejects a manifest declared for a different protocol than the entry point serves', async () => {
+  await assertRejects(
+    () => loadManifestFile(fixturePath, 'grpc' as Protocol),
+    ManifestParseError,
+    'this entry point serves "grpc"',
+  )
 })

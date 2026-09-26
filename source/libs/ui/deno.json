@@ -1,0 +1,21 @@
+{
+  "name": "@ritaj/ui",
+  "exports": "./index.ts",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "react",
+    "lib": ["dom", "dom.iterable", "deno.ns"],
+    "types": ["npm:@types/react@19", "npm:@types/react-dom@19"]
+  },
+  "imports": {
+    "react": "npm:react@19.2.8",
+    "react-dom": "npm:react-dom@19.2.8",
+    "@types/react": "npm:@types/react@19",
+    "@types/react-dom": "npm:@types/react-dom@19",
+    "@base-ui/react/": "npm:@base-ui/react@1.6.0/",
+    "class-variance-authority": "npm:class-variance-authority@0.7.1",
+    "clsx": "npm:clsx@2.1.1",
+    "tailwind-merge": "npm:tailwind-merge@3.6.0",
+    "lucide-react": "npm:lucide-react@1.28.0"
+  }
+}

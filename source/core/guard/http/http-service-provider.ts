@@ -1,17 +1,10 @@
 import type { ServiceProvider } from '../service-provider.ts'
-
-/** The body served for every rejection, e.g. loaded once at startup from a configured URL (local file, S3, a CDN — anything `fetch` can reach). */
-export interface RejectResponse {
-  body: Uint8Array<ArrayBuffer>
-  contentType: string
-}
-
-const DEFAULT_REJECT_STATUS = 403
+import type { RejectResponse } from './reject-responses/reject-response.ts'
 
 /**
  * Carries out a `Guard`'s verdict over HTTP: `forward()` reverse-proxies the
- * request to `upstream`, `reject()` answers with `403` and `rejectResponse`'s
- * body (a bare empty `403` if none is configured). Neither method returns
+ * request to `upstream`, `reject()` answers with the injected `RejectResponse`
+ * (a bare empty `403` when a service configured no custom page). Neither method returns
  * anything (per `ServiceProvider`'s contract) — instead, this class is
  * constructed with a `resolve` function (from `Promise.withResolvers()`)
  * that it calls with the eventual `Response`. This lets the HTTP handler
@@ -25,7 +18,7 @@ export class HttpServiceProvider implements ServiceProvider {
     private readonly request: Request,
     private readonly upstream: URL,
     private readonly resolve: (response: Response) => void,
-    private readonly rejectResponse?: RejectResponse,
+    private readonly rejectResponse: RejectResponse,
   ) {}
 
   async forward(): Promise<void> {
@@ -44,15 +37,6 @@ export class HttpServiceProvider implements ServiceProvider {
 
   // deno-lint-ignore require-await
   async reject(): Promise<void> {
-    if (this.rejectResponse === undefined) {
-      this.resolve(new Response(null, { status: DEFAULT_REJECT_STATUS }))
-      return
-    }
-    this.resolve(
-      new Response(this.rejectResponse.body, {
-        status: DEFAULT_REJECT_STATUS,
-        headers: { 'content-type': this.rejectResponse.contentType },
-      }),
-    )
+    this.resolve(this.rejectResponse.toResponse())
   }
 }

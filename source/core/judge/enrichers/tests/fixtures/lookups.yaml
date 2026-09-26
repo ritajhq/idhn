@@ -1,0 +1,10 @@
+lookups:
+  - as: agent_directory
+    actions: [billing.invoice_approve]
+    http:
+      url: http://directory.internal/agents/{subject}
+    ttl_seconds: 60
+  - as: risk_score
+    http:
+      url: http://risk.internal/scores/{subject}
+    optional: true

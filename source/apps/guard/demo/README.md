@@ -25,9 +25,9 @@ JUDGE_PORT=9300 \
 KV_PATH=/tmp/judge-demo.db \
 deno task start
 
-# terminal 3 — the proxy, pointed at the judge server, this demo's
-# manifest (for action resolution), and its 403 page
-cd source/apps/guard/proxy
+# terminal 3 — the standalone guard, pointed at the judge server, this
+# demo's manifest (for action resolution), and its 403 page
+cd source/apps/guard/standalone
 SERVICE_MANIFEST_PATH=../demo/manifest.yaml \
 JUDGE_SERVER_URL=http://localhost:9300 \
 UPSTREAM_URL=http://localhost:9100 \
@@ -38,12 +38,18 @@ deno task start
 
 Before the demo policy can ever allow anything, seed the association it's
 governed by (judge-server never bootstraps this from the manifest — some
-other integration-level actor is expected to write it into KV):
+other integration-level actor is expected to write it). Do it through the
+`Policy.Registry` so the KV row layout stays private to `Policy.Registries.Kv`:
 
 ```sh
 deno eval --unstable-kv "
+import * as Access from '@idhn/access'
+import * as Policy from '@idhn/policy'
 const kv = await Deno.openKv('/tmp/judge-demo.db')
-await kv.set(['policies', 'demo.home.visit', 'demo.home.visit'], true)
+await new Policy.Registries.Kv(kv).associate(
+  new Access.Action('demo.home.visit'),
+  new Policy.Identifier('demo.home.visit'),
+)
 kv.close()
 "
 ```

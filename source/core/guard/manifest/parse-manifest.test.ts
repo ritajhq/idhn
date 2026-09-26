@@ -201,3 +201,22 @@ Deno.test('parseManifest: rejects an action name with a hyphenated segment', () 
     'fraud-check',
   )
 })
+
+Deno.test('parseManifest: defaults to the http protocol when none is declared', () => {
+  assertEquals(parseManifest(validRaw).protocol, 'http')
+})
+
+Deno.test('parseManifest: accepts an explicit http protocol', () => {
+  assertEquals(
+    parseManifest({ ...validRaw, protocol: 'http' }).protocol,
+    'http',
+  )
+})
+
+Deno.test('parseManifest: rejects an unknown protocol', () => {
+  assertThrows(
+    () => parseManifest({ ...validRaw, protocol: 'carrier-pigeon' }),
+    ManifestParseError,
+    'manifest.protocol must be one of: http',
+  )
+})

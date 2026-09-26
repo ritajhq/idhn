@@ -1,5 +1,5 @@
 {
-  "name": "@mithaq/guard",
+  "name": "@idhn/guard",
   "exports": "./index.ts",
   "imports": {
     "@std/assert": "jsr:@std/assert@1.0.14",

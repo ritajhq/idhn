@@ -2,6 +2,8 @@ export interface Config {
   bundlePath: string
   port: number
   kvPath: string | undefined
+  policyDataPath: string | undefined
+  enrichmentPath: string | undefined
 }
 
 /** The slice of `Deno.Env` `loadConfig` actually needs, so tests can supply a lightweight fake. */
@@ -19,6 +21,8 @@ export function loadConfig(env: EnvReader = Deno.env): Config {
     bundlePath: requireEnv(env, 'POLICY_BUNDLE_PATH'),
     port: readPort(env, 'JUDGE_PORT'),
     kvPath: readOptionalEnv(env, 'KV_PATH'),
+    policyDataPath: readOptionalEnv(env, 'POLICY_DATA_PATH'),
+    enrichmentPath: readOptionalEnv(env, 'ENRICHMENT_PATH'),
   }
 }
 

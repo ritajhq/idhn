@@ -1,9 +1,9 @@
-import type { Action, Context } from '@mithaq/judge'
+import type * as Access from '@idhn/access'
 
 /** What an `ActionResolver` resolves a request to: the action being attempted, and its context. */
 export interface ResolvedAction {
-  action: Action
-  context: Context
+  action: Access.Action
+  context: Access.Context
 }
 
 /**

@@ -1,47 +1,12 @@
 {
   "version": "5",
   "specifiers": {
-    "jsr:@cliffy/ansi@1.2.1": "1.2.1",
-    "jsr:@cliffy/command@1.2.1": "1.2.1",
-    "jsr:@cliffy/flags@1.2.1": "1.2.1",
-    "jsr:@cliffy/internal@1.2.1": "1.2.1",
-    "jsr:@cliffy/keycode@1.2.1": "1.2.1",
-    "jsr:@cliffy/prompt@1.2.1": "1.2.1",
-    "jsr:@cliffy/table@1.2.1": "1.2.1",
-    "jsr:@david/dax@0.42.0": "0.42.0",
-    "jsr:@david/path@0.2": "0.2.0",
-    "jsr:@david/which@0.4.2": "0.4.2",
-    "jsr:@david/which@~0.4.1": "0.4.2",
-    "jsr:@std/assert@0.221": "0.221.0",
     "jsr:@std/assert@1.0.14": "1.0.14",
-    "jsr:@std/assert@^1.0.19": "1.0.19",
-    "jsr:@std/async@1.0.14": "1.0.14",
-    "jsr:@std/bytes@0.221": "0.221.0",
-    "jsr:@std/cli@1.0.32": "1.0.32",
     "jsr:@std/collections@^1.1.3": "1.3.0",
-    "jsr:@std/crypto@1.1.0": "1.1.0",
-    "jsr:@std/dotenv@0.225.5": "0.225.5",
-    "jsr:@std/encoding@^1.0.10": "1.0.11",
-    "jsr:@std/fmt@1": "1.0.10",
-    "jsr:@std/fmt@^1.0.10": "1.0.10",
-    "jsr:@std/fs@1": "1.0.24",
-    "jsr:@std/fs@1.0.24": "1.0.24",
     "jsr:@std/internal@^1.0.10": "1.0.14",
-    "jsr:@std/internal@^1.0.14": "1.0.14",
-    "jsr:@std/io@0.221": "0.221.0",
-    "jsr:@std/io@~0.225.3": "0.225.3",
-    "jsr:@std/path@1": "1.1.6",
-    "jsr:@std/path@1.1.6": "1.1.6",
-    "jsr:@std/path@^1.1.5": "1.1.6",
-    "jsr:@std/semver@^1.0.8": "1.0.8",
-    "jsr:@std/streams@0.221": "0.221.0",
-    "jsr:@std/streams@^1.0.17": "1.1.1",
-    "jsr:@std/tar@0.1.10": "0.1.10",
-    "jsr:@std/text@^1.0.19": "1.0.19",
     "jsr:@std/toml@1": "1.0.11",
     "jsr:@std/yaml@1": "1.1.2",
     "jsr:@std/yaml@1.1.2": "1.1.2",
-    "npm:@actions/expressions@0.3.60": "0.3.60",
     "npm:@open-policy-agent/opa-wasm@1.10.0": "1.10.0",
     "npm:@types/react-dom@19": "19.2.3_@types+react@19.2.17",
     "npm:@types/react@19": "19.2.17",
@@ -51,165 +16,17 @@
     "npm:react@19.2.8": "19.2.8"
   },
   "jsr": {
-    "@cliffy/ansi@1.2.1": {
-      "integrity": "b8702def9c0110b6eeb2b3b71e0b26cbe0a427facbb4f9c0189da0ba19feb549",
-      "dependencies": [
-        "jsr:@cliffy/internal",
-        "jsr:@std/encoding",
-        "jsr:@std/io@~0.225.3"
-      ]
-    },
-    "@cliffy/command@1.2.1": {
-      "integrity": "b7b017c81560d96580ea810c8564566884d8194416f6fc06bfdc8846e8fd590f",
-      "dependencies": [
-        "jsr:@cliffy/flags",
-        "jsr:@cliffy/internal",
-        "jsr:@cliffy/table",
-        "jsr:@std/fmt@^1.0.10",
-        "jsr:@std/semver",
-        "jsr:@std/text"
-      ]
-    },
-    "@cliffy/flags@1.2.1": {
-      "integrity": "10034920ef7595db586fecec5a3b10a4ec800c513cbbc368414cd748dac706fb",
-      "dependencies": [
-        "jsr:@cliffy/internal",
-        "jsr:@std/text"
-      ]
-    },
-    "@cliffy/internal@1.2.1": {
-      "integrity": "e398f41c6839d3d4d249c963bfcb1058013091425926d53a3cb482b1ca70684b"
-    },
-    "@cliffy/keycode@1.2.1": {
-      "integrity": "ce0a1e00986054da31bc767274acefdc923338a47e75ad1fc2046a11c87ace16"
-    },
-    "@cliffy/prompt@1.2.1": {
-      "integrity": "e468fae0f52093ff2099f5be0bbc7632348ab82a3b7337b12ddd888aeb5d6eed",
-      "dependencies": [
-        "jsr:@cliffy/ansi",
-        "jsr:@cliffy/internal",
-        "jsr:@cliffy/keycode",
-        "jsr:@std/assert@^1.0.19",
-        "jsr:@std/fmt@^1.0.10",
-        "jsr:@std/io@~0.225.3",
-        "jsr:@std/path@^1.1.5",
-        "jsr:@std/text"
-      ]
-    },
-    "@cliffy/table@1.2.1": {
-      "integrity": "be333e62f2c754f8bf75a38c8177515b152040572c9f75298e9bcef1314b82ff",
-      "dependencies": [
-        "jsr:@std/fmt@^1.0.10"
-      ]
-    },
-    "@david/dax@0.42.0": {
-      "integrity": "0c547c9a20577a6072b90def194c159c9ddab82280285ebfd8268a4ebefbd80b",
-      "dependencies": [
-        "jsr:@david/path",
-        "jsr:@david/which@~0.4.1",
-        "jsr:@std/fmt@1",
-        "jsr:@std/fs@1",
-        "jsr:@std/io@0.221",
-        "jsr:@std/path@1",
-        "jsr:@std/streams@0.221"
-      ]
-    },
-    "@david/path@0.2.0": {
-      "integrity": "f2d7aa7f02ce5a55e27c09f9f1381794acb09d328f8d3c8a2e3ab3ffc294dccd",
-      "dependencies": [
-        "jsr:@std/fs@1",
-        "jsr:@std/path@1"
-      ]
-    },
-    "@david/which@0.4.2": {
-      "integrity": "440ee262bc0673b57a39ad4d0dc5673e515ddd41c049a55b2588a0881e5d4a8c"
-    },
-    "@std/assert@0.221.0": {
-      "integrity": "a5f1aa6e7909dbea271754fd4ab3f4e687aeff4873b4cef9a320af813adb489a"
-    },
     "@std/assert@1.0.14": {
       "integrity": "68d0d4a43b365abc927f45a9b85c639ea18a9fab96ad92281e493e4ed84abaa4",
       "dependencies": [
-        "jsr:@std/internal@^1.0.10"
-      ]
-    },
-    "@std/assert@1.0.19": {
-      "integrity": "eaada96ee120cb980bc47e040f82814d786fe8162ecc53c91d8df60b8755991e"
-    },
-    "@std/async@1.0.14": {
-      "integrity": "62e954a418652c704d37563a3e54a37d4cf0268a9dcaeac1660cc652880b5326"
-    },
-    "@std/bytes@0.221.0": {
-      "integrity": "64a047011cf833890a4a2ab7293ac55a1b4f5a050624ebc6a0159c357de91966"
-    },
-    "@std/cli@1.0.32": {
-      "integrity": "188b3a100d6202d64e3f5bd3d799c7fa4f6d77f92cc65eb7f641c1fa0aa92a66",
-      "dependencies": [
-        "jsr:@std/fmt@^1.0.10",
-        "jsr:@std/internal@^1.0.14"
+        "jsr:@std/internal"
       ]
     },
     "@std/collections@1.3.0": {
       "integrity": "eb36b43d784477ea0b476483ac034a14bdd182aff921c812ecf662a1fcef9498"
     },
-    "@std/crypto@1.1.0": {
-      "integrity": "b8d6d0a6377a32b213af2661ed7bf1062d94feac0c57def5526a8e74a95c3ec8"
-    },
-    "@std/dotenv@0.225.5": {
-      "integrity": "9ce6f9d0ec3311f74a32535aa1b8c62ed88b1ab91b7f0815797d77a6f60c922f"
-    },
-    "@std/encoding@1.0.11": {
-      "integrity": "e7cef2f0b3153bccc17431e7c864a1de03a4b6d9647389c43e08aaa775d37385"
-    },
-    "@std/fmt@1.0.10": {
-      "integrity": "90dfba288802ac6de82fb31d0917eb9e4450b9925b954d5e51fc29ac07419db5"
-    },
-    "@std/fs@1.0.24": {
-      "integrity": "f3061b45b81673a2bece689da041df32d174be064c89eb6397fb5718d3fb7877",
-      "dependencies": [
-        "jsr:@std/internal@^1.0.14",
-        "jsr:@std/path@^1.1.5"
-      ]
-    },
     "@std/internal@1.0.14": {
       "integrity": "291516b3d4c35024d6ffbc0a9df5bf4c64116e05b50012cf846710152d2ffdf7"
-    },
-    "@std/io@0.221.0": {
-      "integrity": "faf7f8700d46ab527fa05cc6167f4b97701a06c413024431c6b4d207caa010da",
-      "dependencies": [
-        "jsr:@std/assert@0.221",
-        "jsr:@std/bytes"
-      ]
-    },
-    "@std/io@0.225.3": {
-      "integrity": "27b07b591384d12d7b568f39e61dff966b8230559122df1e9fd11cc068f7ddd1"
-    },
-    "@std/path@1.1.6": {
-      "integrity": "c68485c2a4dfbb5ae3cc74fae4e8c4e5d874cf8a8ed12927917235c758b46cbe",
-      "dependencies": [
-        "jsr:@std/internal@^1.0.14"
-      ]
-    },
-    "@std/semver@1.0.8": {
-      "integrity": "dc830e8b8b6a380c895d53fbfd1258dc253704ca57bbe1629ac65fd7830179b7"
-    },
-    "@std/streams@0.221.0": {
-      "integrity": "47f2f74634b47449277c0ee79fe878da4424b66bd8975c032e3afdca88986e61",
-      "dependencies": [
-        "jsr:@std/io@0.221"
-      ]
-    },
-    "@std/streams@1.1.1": {
-      "integrity": "92556d350e537e9dce527a6d08f6f15be3ff65e656079dea69d15252187c7613"
-    },
-    "@std/tar@0.1.10": {
-      "integrity": "6bf907f3a4bc8bfef42973ba132d946756a6161ef6b914a9e1c06debe664db17",
-      "dependencies": [
-        "jsr:@std/streams@^1.0.17"
-      ]
-    },
-    "@std/text@1.0.19": {
-      "integrity": "003a0e032d360e8c3a4e0410fb792c77a66bd6553fee9d60c6ec1bce30d29223"
     },
     "@std/toml@1.0.11": {
       "integrity": "e084988b872ca4bad6aedfb7350f6eeed0e8ba88e9ee5e1590621c5b5bb8f715",
@@ -222,9 +39,6 @@
     }
   },
   "npm": {
-    "@actions/expressions@0.3.60": {
-      "integrity": "sha512-9Go4zz77GbM6iUkullgo0tN7AHgUNRLkw66C6k3mHEc/QScweRNffjSluS0jcip+ULGkDYzBnyMvY9RjnFjEMA=="
-    },
     "@open-policy-agent/opa-wasm@1.10.0": {
       "integrity": "sha512-ymR/nFS3nO9o24j9xowGGQaf+Gmb813QcxUpVZkfRlJkawKWqSIllnEH15agyWjijmOIyhA+OBErenx6N3jphw==",
       "dependencies": [
@@ -275,24 +89,48 @@
       ".ensemble/kits/build/deno.bundle": {
         "dependencies": [
           "jsr:@david/dax@0.42.0",
-          "jsr:@ensemble/core@*",
           "jsr:@ensemble/kit-sdk@*",
+          "jsr:@std/fs@1.0.24",
           "jsr:@std/path@1.1.6"
         ]
       },
-      ".ensemble/kits/build/react.spa": {
+      ".ensemble/kits/build/react": {
         "dependencies": [
           "jsr:@david/dax@0.42.0",
-          "jsr:@ensemble/core@*",
           "jsr:@ensemble/kit-sdk@*",
           "jsr:@std/fs@1.0.24",
+          "jsr:@std/path@1.1.6"
+        ]
+      },
+      ".ensemble/kits/deploy/aws": {
+        "dependencies": [
+          "jsr:@ensemble/kit-sdk@*",
+          "jsr:@std/assert@^1.0.19",
+          "jsr:@std/path@1.1.6",
+          "jsr:@std/testing@1.0.16",
+          "jsr:@std/yaml@1.1.2"
+        ]
+      },
+      ".ensemble/kits/deploy/compose": {
+        "dependencies": [
+          "jsr:@ensemble/kit-sdk@*",
+          "jsr:@std/assert@^1.0.19",
+          "jsr:@std/path@1.1.6",
+          "jsr:@std/testing@1.0.16",
+          "jsr:@std/yaml@1.1.2"
+        ]
+      },
+      ".ensemble/kits/lib/jsr": {
+        "dependencies": [
+          "jsr:@david/dax@0.42.0",
+          "jsr:@ensemble/kit-sdk@*",
+          "jsr:@std/assert@1.0.14",
           "jsr:@std/path@1.1.6"
         ]
       },
       ".ensemble/kits/pack/deno.compile": {
         "dependencies": [
           "jsr:@david/dax@0.42.0",
-          "jsr:@ensemble/core@*",
           "jsr:@ensemble/kit-sdk@*",
           "jsr:@std/fs@1.0.24",
           "jsr:@std/path@1.1.6",
@@ -307,12 +145,32 @@
           "jsr:@std/path@1.1.6"
         ]
       },
-      "source/apps/guard/proxy": {
+      "source/apps/guard/embedded": {
+        "dependencies": [
+          "jsr:@std/assert@1.0.14"
+        ]
+      },
+      "source/apps/guard/standalone": {
         "dependencies": [
           "jsr:@std/assert@1.0.14"
         ]
       },
       "source/apps/judge/server": {
+        "dependencies": [
+          "jsr:@std/assert@1.0.14"
+        ]
+      },
+      "source/apps/web": {
+        "dependencies": [
+          "jsr:@ritaj/ui@*",
+          "npm:@types/react-dom@19",
+          "npm:@types/react@19",
+          "npm:react-dom@19.2.8",
+          "npm:react-router@7.18.2",
+          "npm:react@19.2.8"
+        ]
+      },
+      "source/core/access": {
         "dependencies": [
           "jsr:@std/assert@1.0.14"
         ]
@@ -326,56 +184,32 @@
       },
       "source/core/judge": {
         "dependencies": [
-          "jsr:@std/assert@1.0.14"
+          "jsr:@std/assert@1.0.14",
+          "jsr:@std/yaml@1.1.2"
         ]
       },
-      "source/core/judge-opa": {
+      "source/core/opa": {
         "dependencies": [
           "jsr:@std/assert@1.0.14",
           "npm:@open-policy-agent/opa-wasm@1.10.0"
         ]
-      }
-    },
-    "links": {
-      "jsr:@ensemble/core": {
+      },
+      "source/core/policy": {
         "dependencies": [
-          "jsr:@david/dax@0.42.0",
-          "jsr:@david/which@0.4.2",
-          "jsr:@ensemble/kit-sdk@*",
-          "jsr:@ensemble/workflow@*",
-          "jsr:@std/dotenv@0.225.5",
-          "jsr:@std/fs@1.0.24",
-          "jsr:@std/path@1.1.6",
-          "jsr:@std/tar@0.1.10",
-          "jsr:@std/yaml@1.1.2"
+          "jsr:@std/assert@1.0.14"
         ]
       },
-      "jsr:@ensemble/kit-sdk": {
+      "source/libs/ui": {
         "dependencies": [
-          "jsr:@std/cli@1.0.32",
-          "jsr:@std/path@1.1.6",
-          "jsr:@std/yaml@1.1.2"
-        ]
-      },
-      "jsr:@ensemble/platform": {
-        "dependencies": [
-          "jsr:@ensemble/core@*",
-          "jsr:@ensemble/workflow@*",
-          "jsr:@std/crypto@1.1.0",
-          "jsr:@std/fs@1.0.24",
-          "jsr:@std/path@1.1.6",
-          "jsr:@std/tar@0.1.10"
-        ]
-      },
-      "jsr:@ensemble/workflow": {
-        "dependencies": [
-          "jsr:@david/which@0.4.2",
-          "jsr:@std/assert@1.0.14",
-          "jsr:@std/async@1.0.14",
-          "jsr:@std/fs@1.0.24",
-          "jsr:@std/path@1.1.6",
-          "jsr:@std/yaml@1.1.2",
-          "npm:@actions/expressions@0.3.60"
+          "npm:@base-ui/react@1.6.0",
+          "npm:@types/react-dom@19",
+          "npm:@types/react@19",
+          "npm:class-variance-authority@0.7.1",
+          "npm:clsx@2.1.1",
+          "npm:lucide-react@1.28.0",
+          "npm:react-dom@19.2.8",
+          "npm:react@19.2.8",
+          "npm:tailwind-merge@3.6.0"
         ]
       }
     }

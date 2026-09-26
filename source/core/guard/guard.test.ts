@@ -1,17 +1,7 @@
 import { assertEquals } from '@std/assert'
-import {
-  Action,
-  Context,
-  Decision,
-  DenyOverridesStrategy,
-  type Judge,
-  LocalJudge,
-  Policy,
-  type PolicyEngine,
-  type PolicyRepository,
-  PolicyResult,
-  Verdict,
-} from '@mithaq/judge'
+import * as Access from '@idhn/access'
+import * as Judge from '@idhn/judge'
+import * as Policy from '@idhn/policy'
 import type { ActionResolver, ResolvedAction } from './action-resolver.ts'
 import { Guard } from './guard.ts'
 import type { ServiceProvider } from './service-provider.ts'
@@ -24,22 +14,25 @@ class FakeActionResolver implements ActionResolver {
   }
 }
 
-class FakePolicyRepository implements PolicyRepository {
+class FakePolicyRepository implements Policy.Repository {
   calls = 0
 
-  constructor(private readonly policies: Policy[]) {}
+  constructor(private readonly policies: Policy.Identifier[]) {}
 
-  findPoliciesFor(_action: Action): Promise<Policy[]> {
+  findPoliciesFor(_action: Access.Action): Promise<Policy.Identifier[]> {
     this.calls++
     return Promise.resolve(this.policies)
   }
 }
 
-class FakePolicyEngine implements PolicyEngine {
-  constructor(private readonly verdict: Verdict) {}
+class FakePolicyEngine implements Policy.Engine {
+  constructor(private readonly verdict: Policy.Verdict) {}
 
-  evaluate(policy: Policy, _context: Context): Promise<PolicyResult> {
-    return Promise.resolve(new PolicyResult(policy, this.verdict))
+  evaluate(
+    policy: Policy.Identifier,
+    _context: Access.Context,
+  ): Promise<Policy.Result> {
+    return Promise.resolve(new Policy.Result(policy, this.verdict))
   }
 }
 
@@ -58,26 +51,27 @@ class RecordingServiceProvider implements ServiceProvider {
 }
 
 function judgeAlwaysReturning(
-  verdict: Verdict,
-): { judge: Judge; repository: FakePolicyRepository } {
-  const policy = new Policy('policy.a')
+  verdict: Policy.Verdict,
+): { judge: Judge.Behavior; repository: FakePolicyRepository } {
+  const policy = new Policy.Identifier('policy.a')
   const repository = new FakePolicyRepository([policy])
-  const judge = new LocalJudge(
+  const judge = new Judge.Local(
     repository,
     new FakePolicyEngine(verdict),
-    new DenyOverridesStrategy(new Decision(false)),
+    new Judge.DenyOverridesStrategy(new Judge.Decision(false)),
+    new Judge.Enrichers.Passthrough(),
   )
   return { judge, repository }
 }
 
 const resolvedAction: ResolvedAction = {
-  action: new Action('invoice.approve'),
-  context: new Context({ subject: 'alice' }),
+  action: new Access.Action('invoice.approve'),
+  context: new Access.Context({ subject: 'alice' }),
 }
 
 Deno.test('Guard.execute: forwards when the judge allows', async () => {
   const serviceProvider = new RecordingServiceProvider()
-  const { judge } = judgeAlwaysReturning(Verdict.Allow)
+  const { judge } = judgeAlwaysReturning(Policy.Verdict.Allow)
   const guard = new Guard(
     judge,
     new FakeActionResolver(resolvedAction),
@@ -91,7 +85,7 @@ Deno.test('Guard.execute: forwards when the judge allows', async () => {
 
 Deno.test('Guard.execute: rejects when the judge denies', async () => {
   const serviceProvider = new RecordingServiceProvider()
-  const { judge } = judgeAlwaysReturning(Verdict.Deny)
+  const { judge } = judgeAlwaysReturning(Policy.Verdict.Deny)
   const guard = new Guard(
     judge,
     new FakeActionResolver(resolvedAction),
@@ -105,7 +99,7 @@ Deno.test('Guard.execute: rejects when the judge denies', async () => {
 
 Deno.test('Guard.execute: rejects without consulting the judge when no action is resolved', async () => {
   const serviceProvider = new RecordingServiceProvider()
-  const { judge, repository } = judgeAlwaysReturning(Verdict.Allow)
+  const { judge, repository } = judgeAlwaysReturning(Policy.Verdict.Allow)
   const guard = new Guard(judge, new FakeActionResolver(null), serviceProvider)
 
   await guard.execute()

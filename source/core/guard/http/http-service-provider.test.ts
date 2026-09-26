@@ -1,8 +1,6 @@
 import { assertEquals } from '@std/assert'
-import {
-  HttpServiceProvider,
-  type RejectResponse,
-} from './http-service-provider.ts'
+import { HttpServiceProvider } from './http-service-provider.ts'
+import { Bare, Served } from './reject-responses/index.ts'
 
 async function withUpstream(
   handler: (request: Request) => Response | Promise<Response>,
@@ -37,7 +35,12 @@ Deno.test('HttpServiceProvider.forward: proxies the request to the upstream and 
         method: 'POST',
         headers: { 'x-user-id': 'alice' },
       })
-      const provider = new HttpServiceProvider(request, upstream, resolve)
+      const provider = new HttpServiceProvider(
+        request,
+        upstream,
+        resolve,
+        new Bare(),
+      )
 
       await provider.forward()
       const response = await promise
@@ -57,7 +60,12 @@ Deno.test('HttpServiceProvider.forward: relays the upstream body', async () => {
         method: 'POST',
         body: JSON.stringify({ amount: 500 }),
       })
-      const provider = new HttpServiceProvider(request, upstream, resolve)
+      const provider = new HttpServiceProvider(
+        request,
+        upstream,
+        resolve,
+        new Bare(),
+      )
 
       await provider.forward()
       const response = await promise
@@ -78,7 +86,12 @@ Deno.test('HttpServiceProvider.forward: does not follow upstream redirects', asy
     async (upstream) => {
       const { promise, resolve } = Promise.withResolvers<Response>()
       const request = new Request('https://gateway.test/a', { method: 'GET' })
-      const provider = new HttpServiceProvider(request, upstream, resolve)
+      const provider = new HttpServiceProvider(
+        request,
+        upstream,
+        resolve,
+        new Bare(),
+      )
 
       await provider.forward()
       const response = await promise
@@ -92,13 +105,14 @@ Deno.test('HttpServiceProvider.forward: does not follow upstream redirects', asy
   )
 })
 
-Deno.test('HttpServiceProvider.reject: resolves with a bare 403 when no reject response is configured', async () => {
+Deno.test('HttpServiceProvider.reject: resolves with a bare 403 when given a bare reject response', async () => {
   const { promise, resolve } = Promise.withResolvers<Response>()
   const request = new Request('https://gateway.test/a', { method: 'GET' })
   const provider = new HttpServiceProvider(
     request,
     new URL('http://localhost:1/'),
     resolve,
+    new Bare(),
   )
 
   await provider.reject()
@@ -111,10 +125,10 @@ Deno.test('HttpServiceProvider.reject: resolves with a bare 403 when no reject r
 Deno.test('HttpServiceProvider.reject: serves the configured reject response body and content-type', async () => {
   const { promise, resolve } = Promise.withResolvers<Response>()
   const request = new Request('https://gateway.test/a', { method: 'GET' })
-  const rejectResponse: RejectResponse = {
-    body: new TextEncoder().encode('<h1>Forbidden</h1>'),
-    contentType: 'text/html; charset=utf-8',
-  }
+  const rejectResponse = new Served(
+    new TextEncoder().encode('<h1>Forbidden</h1>'),
+    'text/html; charset=utf-8',
+  )
   const provider = new HttpServiceProvider(
     request,
     new URL('http://localhost:1/'),

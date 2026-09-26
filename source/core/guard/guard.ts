@@ -1,4 +1,4 @@
-import type { Judge } from '@mithaq/judge'
+import type * as Judge from '@idhn/judge'
 import type { ActionResolver } from './action-resolver.ts'
 import type { ServiceProvider } from './service-provider.ts'
 
@@ -10,7 +10,7 @@ import type { ServiceProvider } from './service-provider.ts'
  */
 export class Guard {
   constructor(
-    private readonly judge: Judge,
+    private readonly judge: Judge.Behavior,
     private readonly actionResolver: ActionResolver,
     private readonly serviceProvider: ServiceProvider,
   ) {}

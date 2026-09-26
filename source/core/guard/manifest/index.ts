@@ -4,10 +4,11 @@ export type {
   From,
   FromProperty,
   HeaderCriterion,
-  Manifest,
-  ManifestAction,
+  HttpManifest,
+  HttpManifestAction,
   Match,
-} from './schema.ts'
+} from './http/schema.ts'
+export type { Manifest, Protocol, ProtocolManifests } from './schema.ts'
 export { ManifestParseError, parseManifest } from './parse-manifest.ts'
-export { HttpManifestActionResolver } from './http-manifest-action-resolver.ts'
+export { HttpManifestActionResolver } from './http/http-manifest-action-resolver.ts'
 export { loadManifestFile } from './load-manifest-file.ts'

@@ -1,5 +1,5 @@
 {
-  "name": "@mithaq/judge-server",
+  "name": "@idhn/judge-server",
   "exports": "./main.ts",
   "tasks": {
     "start": "deno run --unstable-kv --allow-net --allow-read --allow-write --allow-env main.ts"

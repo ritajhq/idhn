@@ -1,5 +1,3 @@
-export {
-  HttpServiceProvider,
-  type RejectResponse,
-} from './http-service-provider.ts'
-export { loadRejectResponse } from './load-reject-response.ts'
+export { HttpServiceProvider } from './http-service-provider.ts'
+export type { RejectResponse } from './reject-responses/reject-response.ts'
+export * as RejectResponses from './reject-responses/index.ts'
