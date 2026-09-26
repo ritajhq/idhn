@@ -1,9 +1,9 @@
 import { join } from "@std/path";
 import { $ } from "@david/dax";
-import { getKitContext } from "@ensemble/kit-sdk";
-import { resolveDenoExecutable } from "@ensemble/core";
+import * as KitSdk from "@ensemble/kit-sdk";
+import { resolveDenoExecutable, terminateChildrenOnSignal } from "@ensemble/kit-sdk";
 
-const ctx = getKitContext();
+const ctx = KitSdk.Build.getContext();
 
 const entry = join(ctx.source, "main.ts");
 const outFile = join(ctx.out, "main.js");
@@ -12,7 +12,11 @@ const modeArgs = ctx.mode === "production" ? ["--minify"] : [];
 const watchArgs = ctx.watch ? ["--watch"] : [];
 const denoExe = await resolveDenoExecutable();
 
-const result = await $`${denoExe} bundle ${entry} -o ${outFile} ${modeArgs} ${watchArgs}`
-  .noThrow();
+const bundle = $`${denoExe} bundle -q ${entry} -o ${outFile} ${modeArgs} ${watchArgs}`
+  .noThrow()
+  .spawn();
+terminateChildrenOnSignal([bundle]);
+
+const result = await bundle;
 
 Deno.exit(result.code);

@@ -21,7 +21,7 @@ $HOME/.tfenv/bin/tfenv use latest
 curl -fsSL https://raw.githubusercontent.com/ritajhq/ensemble/main/.ensemble/install.sh | sh
 echo 'export PATH="$HOME/.ensemble/bin:$PATH"' >> ~/.zshrc
 
-# opa (Open Policy Agent CLI — compiles .rego policies, incl. to WASM, for judge-opa)
+# opa (Open Policy Agent CLI — compiles .rego policies, incl. to WASM, for the opa package)
 mkdir -p ~/.local/bin
 curl -fsSL -o ~/.local/bin/opa https://openpolicyagent.org/downloads/v1.18.2/opa_linux_amd64_static
 chmod 755 ~/.local/bin/opa

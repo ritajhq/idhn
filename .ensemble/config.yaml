@@ -1,5 +1,7 @@
 build:
-  guard/proxy:
+  guard/standalone:
+    kit: deno.bundle
+  guard/embedded:
     kit: deno.bundle
   guard/fake-service:
     kit: deno.bundle

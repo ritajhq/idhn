@@ -1,12 +1,26 @@
 import { dirname, fromFileUrl, join } from "@std/path";
 import { ensureDir } from "@std/fs";
 import { $ } from "@david/dax";
-import { getPackKitContext, loadKitModes } from "@ensemble/kit-sdk";
+import * as KitSdk from "@ensemble/kit-sdk";
+import { referencedApps } from "./referenced-apps.ts";
 
 const kitDir = dirname(fromFileUrl(import.meta.url));
-const ctx = getPackKitContext();
+const ctx = KitSdk.Pack.getContext();
 
-const modes = await loadKitModes(kitDir);
+// Only apps this ship's Dockerfile actually references (via `COPY
+// --from=<app>`) get registered as build contexts — an app declared in
+// .ensemble/config.yaml but unused by this Dockerfile is left alone. `ens`
+// asks this same question up front via dependencies.ts and builds exactly
+// these apps before ever spawning this script, so their output is already
+// there by now.
+const dependencies = await referencedApps(ctx.ship, ctx.apps);
+
+const artifactContextArgs: string[] = [];
+for (const app of dependencies) {
+  artifactContextArgs.push("--build-context", `${app}=${join(ctx.artifacts, app)}`);
+}
+
+const modes = await KitSdk.Pack.loadModes(kitDir);
 const format = modes[ctx.mode];
 if (!format) {
   const available = Object.keys(modes).join(", ") || "(none declared)";
@@ -37,13 +51,23 @@ if (format.startsWith("image")) {
   output = `type=${format},dest=${dest}`;
 }
 
-const result = await $`docker buildx build
+// --verbose lets buildx's own progress log (layer pulls, build steps, the
+// works) through unfiltered — otherwise it's hidden behind the pack spinner,
+// via --progress=quiet (still writes real errors to stderr) plus discarding
+// stdout outright (quiet mode's only remaining output there on success is a
+// bare content-digest line, which the spinner's own resolved line replaces).
+const progressArgs = ctx.verbose ? [] : ["--progress", "quiet"];
+
+const build = $`docker buildx build
   --tag ${ctx.outputName}
   --build-context packages=${ctx.packages}
-  --build-context artifacts=${ctx.artifacts}
+  ${artifactContextArgs}
   --output ${output}
   ${allowArgs}
+  ${progressArgs}
   ${ctx.ship}`
   .noThrow();
+
+const result = await (ctx.verbose ? build : build.stdout("null"));
 
 Deno.exit(result.code);

@@ -1,5 +1,5 @@
 {
-  "name": "mithaq.workspace",
+  "name": "idhn.workspace",
   "dockerFile": "./Dockerfile",
   "workspaceFolder": "/home/developer/workspace",
   "updateRemoteUserUID": true,
@@ -25,7 +25,8 @@
         "ms-azuretools.vscode-docker",
         "mhutchie.git-graph",
         "Anthropic.claude-code",
-        "hashicorp.terraform"
+        "hashicorp.terraform",
+        "denoland.vscode-deno"
       ]
     }
   }
