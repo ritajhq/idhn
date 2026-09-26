@@ -63,6 +63,52 @@ Deno.test('HttpLookup.enrich: fetches the URL filled from request facts and adds
   )
 })
 
+Deno.test('HttpLookup.enrich: fills a dotted placeholder from a nested fact, such as the authenticated subject', async () => {
+  const paths: string[] = []
+  await withServer(
+    (request) => {
+      paths.push(new URL(request.url).pathname)
+      return Response.json({ places: ['p-1'] })
+    },
+    async (origin) => {
+      const lookup = new HttpLookup(
+        definition(origin, {
+          as: 'managed',
+          url: `${origin}/managers/{auth.subject}/places`,
+        }),
+      )
+
+      const enriched = await lookup.enrich(
+        action,
+        new Access.Context({
+          auth: { status: 'authenticated', subject: 'u-1', claims: {} },
+        }),
+      )
+
+      assertEquals(enriched.facts.managed, { places: ['p-1'] })
+      assertEquals(paths, ['/managers/u-1/places'])
+    },
+  )
+})
+
+Deno.test('HttpLookup.enrich: throws LookupError when a dotted placeholder has no value, as for an anonymous identity', async () => {
+  const lookup = new HttpLookup(
+    definition('http://localhost:1', {
+      url: 'http://x.internal/{auth.subject}',
+    }),
+  )
+
+  await assertRejects(
+    () =>
+      lookup.enrich(
+        action,
+        new Access.Context({ auth: { status: 'anonymous', claims: {} } }),
+      ),
+    LookupError,
+    'auth.subject',
+  )
+})
+
 Deno.test('HttpLookup.enrich: leaves the context alone for an action the lookup does not apply to', async () => {
   let hits = 0
   await withServer(

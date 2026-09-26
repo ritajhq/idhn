@@ -7,7 +7,7 @@ export interface HttpLookupDefinition {
   as: string
   /** Action names this lookup applies to; every action when omitted. */
   actions?: readonly string[]
-  /** URL to `GET`. `{name}` placeholders are filled from the request's facts. */
+  /** URL to `GET`. `{name}` placeholders are filled from the request's facts; `{auth.subject}` reaches into a nested one. */
   url: string
   /** How long a response may be reused, per resolved URL. `0` disables caching. */
   ttlSeconds: number
@@ -82,7 +82,7 @@ export class HttpLookup implements Enricher {
     const resolved = this.definition.url.replace(
       PLACEHOLDER,
       (_placeholder, name: string) => {
-        const fact = context.facts[name]
+        const fact = this.factAt(context, name)
         if (!isUrlSafeScalar(fact)) {
           throw new LookupError(
             `Lookup "${this.definition.as}" needs a string, number or boolean fact "${name}" to build its URL`,
@@ -92,6 +92,16 @@ export class HttpLookup implements Enricher {
       },
     )
     return new URL(resolved)
+  }
+
+  /** The fact a placeholder names: a top-level fact, or with a dotted path one nested inside it (`{auth.subject}`). */
+  private factAt(context: Access.Context, path: string): unknown {
+    return path.split('.').reduce<unknown>((current, key) => {
+      if (current === null || typeof current !== 'object') {
+        return undefined
+      }
+      return (current as Record<string, unknown>)[key]
+    }, context.facts)
   }
 
   private async fetchCached(url: URL): Promise<unknown> {

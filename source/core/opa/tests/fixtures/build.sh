@@ -16,6 +16,9 @@ opa build -t wasm \
   -e invoice/approve/fraud_override/allow \
   -e invoice/allowlisted/allow \
   -e invoice/directory/allow \
+  -e profile/read/allow \
+  -e report/view/allow \
+  -e place/manage/allow \
   ./*.rego \
   -o "$tmp/bundle.tar.gz"
 tar xzf "$tmp/bundle.tar.gz" -C "$tmp"

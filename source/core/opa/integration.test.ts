@@ -141,3 +141,129 @@ Deno.test('Judge + OPA.PolicyEngine + HttpLookup: a policy decides on a fact fet
     await directory.finished
   }
 })
+
+const alice = Access.Identity.authenticated('u-1', 'portal', {
+  username: 'alice',
+  emailVerified: true,
+})
+const unverified = Access.Identity.authenticated('u-2', 'portal', {
+  username: 'bob',
+  emailVerified: false,
+})
+
+async function judgeGoverning(
+  policy: string,
+  data: Record<string, unknown> = {},
+  enricher: Judge.Enricher = new Judge.Enrichers.Passthrough(),
+): Promise<{ judge: Judge.Behavior; action: Access.Action }> {
+  const registry = new Policy.Registries.InMemory()
+  const governed = new Access.Action(policy)
+  await registry.associate(governed, new Policy.Identifier(policy))
+  const judge = new Judge.Local(
+    registry,
+    await PolicyEngine.load(await Deno.readFile(bundlePath), data),
+    new Judge.DenyOverridesStrategy(new Judge.Decision(false)),
+    enricher,
+  )
+  return { judge, action: governed }
+}
+
+function authenticatedAs(
+  identity: Access.Identity,
+  facts: Record<string, unknown> = {},
+): Access.Context {
+  return new Access.Context(facts).with({
+    [Access.Identity.FACT]: identity.toFact(),
+  })
+}
+
+Deno.test('Judge + OPA.PolicyEngine + auth: a policy requiring authentication reads the identity and its claims', async () => {
+  const { judge, action } = await judgeGoverning('profile.read')
+
+  const verified = await judge.decide(action, authenticatedAs(alice))
+  const notVerified = await judge.decide(action, authenticatedAs(unverified))
+  const anonymous = await judge.decide(
+    action,
+    authenticatedAs(Access.Identity.anonymous()),
+  )
+  const invalid = await judge.decide(
+    action,
+    authenticatedAs(Access.Identity.invalid()),
+  )
+
+  assertEquals(verified.allowed, true)
+  assertEquals(notVerified.allowed, false)
+  assertEquals(anonymous.allowed, false)
+  assertEquals(invalid.allowed, false)
+})
+
+Deno.test('Judge + OPA.PolicyEngine + auth: a role the identity provider cannot say comes from data, keyed by the subject', async () => {
+  const { judge, action } = await judgeGoverning('report.view', {
+    roles: { 'u-1': ['auditor'], 'u-2': ['viewer'] },
+  })
+
+  const auditor = await judge.decide(action, authenticatedAs(alice))
+  const viewer = await judge.decide(action, authenticatedAs(unverified))
+  const anonymous = await judge.decide(
+    action,
+    authenticatedAs(Access.Identity.anonymous()),
+  )
+
+  assertEquals(auditor.allowed, true)
+  assertEquals(viewer.allowed, false)
+  assertEquals(anonymous.allowed, false)
+})
+
+Deno.test('Judge + OPA.PolicyEngine + auth + HttpLookup: a relationship is looked up by the authenticated subject', async () => {
+  const requested: string[] = []
+  const controller = new AbortController()
+  const managers = Deno.serve(
+    { port: 0, signal: controller.signal, onListen: () => {} },
+    (request) => {
+      const subject = new URL(request.url).pathname.split('/').at(-2) ?? ''
+      requested.push(subject)
+      return Response.json({ places: subject === 'u-1' ? ['p-1'] : [] })
+    },
+  )
+  const origin = `http://localhost:${(managers.addr as Deno.NetAddr).port}`
+
+  try {
+    const { judge, action } = await judgeGoverning(
+      'place.manage',
+      {},
+      new Judge.Enrichers.HttpLookup({
+        as: 'managed_places',
+        url: `${origin}/managers/{auth.subject}/places`,
+        ttlSeconds: 0,
+        // An anonymous identity has no subject: omit the fact, and let the policy deny.
+        optional: true,
+      }),
+    )
+
+    const manager = await judge.decide(
+      action,
+      authenticatedAs(alice, { placeId: 'p-1' }),
+    )
+    const otherPlace = await judge.decide(
+      action,
+      authenticatedAs(alice, { placeId: 'p-2' }),
+    )
+    const notManager = await judge.decide(
+      action,
+      authenticatedAs(unverified, { placeId: 'p-1' }),
+    )
+    const anonymous = await judge.decide(
+      action,
+      authenticatedAs(Access.Identity.anonymous(), { placeId: 'p-1' }),
+    )
+
+    assertEquals(manager.allowed, true)
+    assertEquals(otherPlace.allowed, false)
+    assertEquals(notManager.allowed, false)
+    assertEquals(anonymous.allowed, false)
+    assertEquals(requested, ['u-1', 'u-1', 'u-2'])
+  } finally {
+    controller.abort()
+    await managers.finished
+  }
+})
