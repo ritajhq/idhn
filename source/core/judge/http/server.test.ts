@@ -1,8 +1,9 @@
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertRejects } from '@std/assert'
 import type * as Access from '@idhn/access'
 import { Decision } from '../decision.ts'
 import type { Behavior } from '../behavior.ts'
 import { Server } from './server.ts'
+import { UnavailableError } from '../unavailable-error.ts'
 
 class FakeJudge implements Behavior {
   received: Array<{ action: Access.Action; context: Access.Context }> = []
@@ -75,4 +76,43 @@ Deno.test('Server.handle: responds 400 when action or context is missing', async
   )
 
   assertEquals(response.status, 400)
+})
+
+class FailingJudge implements Behavior {
+  constructor(private readonly error: Error) {}
+
+  decide(): Promise<Decision> {
+    return Promise.reject(this.error)
+  }
+}
+
+function decideRequest(): Request {
+  return new Request('http://judge.test/decide', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'demo.home.visit', context: {} }),
+  })
+}
+
+Deno.test('Server.handle: answers a temporarily unavailable judgement 503 with Retry-After and the failed decision id', async () => {
+  const server = new Server(
+    new FailingJudge(
+      new UnavailableError('directory is down', { decisionId: 'd-9' }),
+    ),
+  )
+
+  const response = await server.handle(decideRequest())
+
+  assertEquals(response.status, 503)
+  assertEquals(response.headers.get('retry-after'), '5')
+  assertEquals(await response.json(), { decisionId: 'd-9' })
+})
+
+Deno.test('Server.handle: lets any other failure propagate, for the process to answer as a fault', async () => {
+  const server = new Server(new FailingJudge(new Error('entrypoint missing')))
+
+  await assertRejects(
+    () => server.handle(decideRequest()),
+    Error,
+    'entrypoint missing',
+  )
 })

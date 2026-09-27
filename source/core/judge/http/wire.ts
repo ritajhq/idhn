@@ -4,6 +4,11 @@ export interface DecideRequestBody {
   context: Record<string, unknown>
 }
 
+/** The `503` body of a judgement that was temporarily unavailable. */
+export interface UnavailableResponseBody {
+  decisionId?: string
+}
+
 export interface DecideResponseBody {
   allowed: boolean
   /** Identifies the judgement, so the caller's records can be matched against the judge's. */

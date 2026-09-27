@@ -29,4 +29,13 @@ const server = new Server(
 const log = new Log.JsonLines()
 server.OnRequestHandled.Do((record) => log.write('guard.request', record))
 
-Deno.serve({ port: config.port }, (request) => server.handle(request))
+Deno.serve(
+  {
+    port: config.port,
+    onError: (error) => {
+      log.writeError('guard.error', error)
+      return new Response(null, { status: 500 })
+    },
+  },
+  (request) => server.handle(request),
+)

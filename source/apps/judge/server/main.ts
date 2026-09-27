@@ -30,4 +30,13 @@ judge.OnDecision.Do((record) => log.write('judge.decision', record))
 
 const server = new Judge.Http.Server(judge)
 
-Deno.serve({ port: config.port }, (request) => server.handle(request))
+Deno.serve(
+  {
+    port: config.port,
+    onError: (error) => {
+      log.writeError('judge.error', error)
+      return new Response(null, { status: 500 })
+    },
+  },
+  (request) => server.handle(request),
+)

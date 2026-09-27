@@ -662,29 +662,33 @@ suite: 202 passed, 0 failed.
 Deliberately out of scope for idhn itself: the consuming self-hostable service's
 own Dockerfile (`FROM guard/base`) lives in that project's own repo, not here.
 
-### Phase 7 — error handling & failure modes
+### Phase 7 — error handling & failure modes (done)
 
-Still not addressed: `Guard.execute()` has no failure handling — if
-`ActionResolver.resolve()`, `PolicyRepository.findPoliciesFor()`,
-`PolicyEngine.evaluate()`, or `DecisionStrategy.combine()` throws/rejects, the
-error propagates out of `Guard.execute()` uncaught. Confirmed concretely in
-Phase 5: `guard-proxy`'s handler has no try/catch either, so today an internal
-error would surface as an unhandled rejection in `Deno.serve` rather than a
-clean response. Needs a decision: does `Guard` catch internal errors and treat
-them as an implicit reject (fail closed, consistent with the existing
-unmatched-action behavior), or is catching left entirely to the composition root
-/ HTTP layer (both now built in Phase 5, at `source/apps/guard/proxy/`)?
-Whichever is chosen must be applied consistently and covered by tests before
-this is production-ready.
+Failures are split by whether asking again may help, because that decides the
+status code a caller gets. In every case the request is denied (fail closed);
+the status only tells the caller whether retrying makes sense.
 
-Phase 5b widened this: `JudgeHttpClient.decide()` now also throws
-`JudgeRequestError` on any non-ok response from judge-server, and a genuine
-network failure (judge-server down, unreachable) throws too — both currently
-propagate out of `Guard.execute()` exactly like every other untreated failure
-mode above. Whatever failure-handling strategy this phase lands on must
-explicitly cover "judge-server is unreachable," since that's now a distinct,
-expected-in-production failure mode (deploys, restarts, network partitions
-between the two processes) rather than a hypothetical.
+- **Temporarily unavailable → `503` with `Retry-After: 5`.**
+  `Judge.UnavailableError` marks a judgement that could not be made because
+  something it depends on is out of reach: the judge-server unreachable, or
+  answering `429`/`502`/`503`/ `504` (`Judge.Http.Client`), or an enrichment
+  lookup's service unreachable or answering those statuses
+  (`Judge.Enrichers.HttpLookup`). `Judge.Local` stamps it with the failed
+  judgement's id and records the outcome as `unavailable`; `Judge.Http.Server`
+  answers it `503` with that id in the body; `Guard` treats it as a rejection
+  (`Rejection.Unavailable`), not a failure, and records the id, so the two log
+  lines still correlate.
+- **Anything else → `500`.** A policy missing from the bundle, a lookup that
+  gets `404`/`500` or a malformed answer, a missing placeholder fact, or a bug
+  propagates. Each app's `main.ts` gives `Deno.serve` an `onError` that writes
+  it as one structured `<app>.error` line (message, error class name, stack) and
+  answers `500`, so nothing reaches Deno's default handler and its free-form
+  output.
+
+Still open: the upstream service being unreachable during `forward()` is a `500`
+fault today, where a reverse proxy would usually answer `502`; lookups and the
+judge client have no request timeout, so a hung service hangs the judgement
+instead of making it unavailable.
 
 ### Phase 8 — observability & audit (done)
 
@@ -707,9 +711,7 @@ project's event-driven convention (`@duesabati/evento`):
 - `@idhn/log` (`libs/log`) writes entries as JSON Lines to stdout,
   synchronously; shipping them is left to an external log shipper.
 
-Still open: a failed request also reaches `Deno.serve`'s default error handler,
-which prints an unstructured stack trace next to the structured line (ties into
-Phase 7); no metrics yet.
+Still open: no metrics yet.
 
 ### Phase 9 — CI
 

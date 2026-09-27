@@ -1,8 +1,10 @@
 import type * as Access from '@idhn/access'
 import type * as Policy from '@idhn/policy'
 import type { Decision } from './decision.ts'
+import { UnavailableError } from './unavailable-error.ts'
 
-export type DecisionOutcome = 'allowed' | 'denied' | 'failed'
+/** `unavailable` when something the judgement depends on was temporarily out of reach, `failed` for any other failure. */
+export type DecisionOutcome = 'allowed' | 'denied' | 'unavailable' | 'failed'
 
 /** One policy's say in a judgement, as recorded. */
 export interface RecordedResult {
@@ -64,7 +66,7 @@ export class DecisionRecord {
       durationMs,
       action.name,
       context.facts,
-      'failed',
+      error instanceof UnavailableError ? 'unavailable' : 'failed',
       [],
       error instanceof Error ? error.message : String(error),
     )

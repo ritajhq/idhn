@@ -162,3 +162,39 @@ Deno.test('HttpServiceProvider.reject: answers 401 for an unauthenticated caller
 
   assertEquals(statuses, [401, 503])
 })
+
+async function rejected(
+  rejection: Rejection,
+  rejectResponse = new Bare(),
+): Promise<Response> {
+  const { promise, resolve } = Promise.withResolvers<Response>()
+  const provider = new HttpServiceProvider(
+    new Request('https://gateway.test/a', { method: 'GET' }),
+    new URL('http://localhost:1/'),
+    resolve,
+    rejectResponse,
+  )
+  await provider.reject(rejection)
+  return await promise
+}
+
+Deno.test('HttpServiceProvider.reject: tells an unavailable rejection when to retry, and no other', async () => {
+  const unavailable = await rejected(Rejection.Unavailable)
+  const forbidden = await rejected(Rejection.Forbidden)
+  const unauthenticated = await rejected(Rejection.Unauthenticated)
+
+  assertEquals(unavailable.headers.get('retry-after'), '5')
+  assertEquals(forbidden.headers.get('retry-after'), null)
+  assertEquals(unauthenticated.headers.get('retry-after'), null)
+})
+
+Deno.test("HttpServiceProvider.reject: keeps a served page's content-type next to Retry-After", async () => {
+  const response = await rejected(
+    Rejection.Unavailable,
+    new Served(new TextEncoder().encode('<p>later</p>'), 'text/html'),
+  )
+
+  assertEquals(response.status, 503)
+  assertEquals(response.headers.get('retry-after'), '5')
+  assertEquals(response.headers.get('content-type'), 'text/html')
+})

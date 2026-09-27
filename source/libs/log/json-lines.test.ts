@@ -18,3 +18,20 @@ Deno.test('JsonLines.write: writes one JSON object per line, tagged with its eve
     { event: 'guard.request', outcome: 'forwarded' },
   ])
 })
+
+Deno.test('JsonLines.writeError: writes an error as a single entry, stack trace included', () => {
+  const lines: string[] = []
+  const log = new JsonLines((line) => lines.push(line))
+
+  class RequestError extends Error {}
+  log.writeError('guard.error', new RequestError('boom'))
+  log.writeError('guard.error', 'not an error')
+
+  assertEquals(lines.length, 2)
+  const [thrown, other] = lines.map((line) => JSON.parse(line))
+  assertEquals(thrown.event, 'guard.error')
+  assertEquals(thrown.error, 'boom')
+  assertEquals(thrown.name, 'RequestError')
+  assertEquals(typeof thrown.stack, 'string')
+  assertEquals(other, { event: 'guard.error', error: 'not an error' })
+})

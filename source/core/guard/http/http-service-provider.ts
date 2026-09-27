@@ -9,12 +9,23 @@ const REJECTION_STATUS: Readonly<Record<Rejection, number>> = {
   [Rejection.Unavailable]: 503,
 }
 
+/** How long a caller is told to wait before trying again after a `503`. */
+const RETRY_AFTER_SECONDS = 5
+
+/** Headers each reason for rejecting a request calls for: only unavailability says when to try again. */
+const REJECTION_HEADERS: Readonly<Record<Rejection, HeadersInit>> = {
+  [Rejection.Forbidden]: {},
+  [Rejection.Unauthenticated]: {},
+  [Rejection.Unavailable]: { 'retry-after': String(RETRY_AFTER_SECONDS) },
+}
+
 /**
  * Carries out a `Guard`'s verdict over HTTP: `forward()` reverse-proxies the
  * request to `upstream`, `reject()` answers with the injected `RejectResponse`
  * (a bare empty body when a service configured no custom page) under the
  * status for the rejection: `403` forbidden, `401` unauthenticated, `503`
- * when the caller's identity could not be checked. Neither method returns
+ * with `Retry-After` when the caller's identity or the judgement could not be
+ * had for now. Neither method returns
  * anything (per `ServiceProvider`'s contract) — instead, this class is
  * constructed with a `resolve` function (from `Promise.withResolvers()`)
  * that it calls with the eventual `Response`. This lets the HTTP handler
@@ -48,7 +59,10 @@ export class HttpServiceProvider implements ServiceProvider {
   // deno-lint-ignore require-await
   async reject(rejection: Rejection): Promise<void> {
     this.resolve(
-      this.rejectResponse.toResponse(REJECTION_STATUS[rejection]),
+      this.rejectResponse.toResponse(
+        REJECTION_STATUS[rejection],
+        REJECTION_HEADERS[rejection],
+      ),
     )
   }
 }

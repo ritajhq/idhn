@@ -13,7 +13,7 @@ export class RequestRecording {
   private outcome: RequestOutcome = 'failed'
   private action: Access.Action | undefined
   private identity: Access.Identity | undefined
-  private decision: Judge.Decision | undefined
+  private decisionId: string | undefined
   private rejection: Rejection | undefined
   private error: string | undefined
 
@@ -26,7 +26,13 @@ export class RequestRecording {
   }
 
   judged(decision: Judge.Decision): void {
-    this.decision = decision
+    this.decisionId = decision.id
+  }
+
+  /** The judge could not answer for now: the request is about to be rejected as unavailable. */
+  unavailable(error: Judge.UnavailableError): void {
+    this.decisionId = error.decisionId
+    this.error = error.message
   }
 
   forwarded(): void {
@@ -53,7 +59,7 @@ export class RequestRecording {
         status: this.identity.status,
         subject: this.identity.subject,
       },
-      this.decision?.id,
+      this.decisionId,
       this.rejection,
       this.error,
     )

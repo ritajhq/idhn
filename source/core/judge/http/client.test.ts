@@ -1,6 +1,7 @@
 import { assertEquals, assertRejects } from '@std/assert'
 import * as Access from '@idhn/access'
 import { Client, RequestError } from './client.ts'
+import { UnavailableError } from '../unavailable-error.ts'
 
 async function withServer(
   handler: (request: Request) => Response | Promise<Response>,
@@ -60,5 +61,39 @@ Deno.test('Client.decide: throws RequestError when the server responds with a no
         RequestError,
       )
     },
+  )
+})
+
+Deno.test('Client.decide: throws UnavailableError naming the failed decision when the server answers 503', async () => {
+  await withServer(
+    () =>
+      Response.json({ decisionId: 'd-9' }, {
+        status: 503,
+        headers: { 'retry-after': '5' },
+      }),
+    async (server) => {
+      const error = await assertRejects(
+        () =>
+          new Client(server).decide(
+            new Access.Action('demo.home.visit'),
+            new Access.Context(),
+          ),
+        UnavailableError,
+      )
+
+      assertEquals(error.decisionId, 'd-9')
+    },
+  )
+})
+
+Deno.test('Client.decide: throws UnavailableError when the server cannot be reached', async () => {
+  await assertRejects(
+    () =>
+      new Client(new URL('http://localhost:1/')).decide(
+        new Access.Action('demo.home.visit'),
+        new Access.Context(),
+      ),
+    UnavailableError,
+    'could not be reached',
   )
 })

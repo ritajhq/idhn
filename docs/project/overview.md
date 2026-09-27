@@ -215,6 +215,25 @@ network and out of the request's latency.
 
 Both carry a `timestamp` (when handling started) and `durationMs`.
 
+Faults nothing handled (a policy missing from the bundle, a bug) are written as
+one `guard.error` or `judge.error` line with the message, the error class name
+and the stack, never as free-form text.
+
+## When something fails: 503 or 500
+
+A request that can't be judged is always denied. The status says whether trying
+again may help:
+
+- **`503` with `Retry-After: 5`** when something the judgement depends on is
+  temporarily out of reach: the judge-server (unreachable, or answering
+  `429`/`502`/`503`/`504`) or an enrichment lookup's service (the same). The
+  judge records the outcome as `unavailable`, and the guard records a `rejected`
+  request with `rejection: unavailable` and the failed judgement's `decisionId`.
+  The same `503` is used when the identity provider can't be reached.
+- **`500`** for everything else, which is a fault to fix rather than wait out: a
+  policy missing from the bundle, a lookup answering `404` or `500` or with a
+  malformed body, a missing placeholder fact, a bug.
+
 **Correlating across processes.** The judge gives every judgement its own id and
 returns it with the `Decision` (over HTTP as `decisionId` in the `/decide`
 response). The guard records that id, so a `guard.request` line and the

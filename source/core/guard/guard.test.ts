@@ -316,3 +316,32 @@ Deno.test('Guard.execute: records a request that failed, with how far it got, th
   assertEquals(records[0].action, 'invoice.approve')
   assertEquals(records[0].decisionId, undefined)
 })
+
+class UnavailableJudge implements Judge.Behavior {
+  decide(): Promise<Judge.Decision> {
+    return Promise.reject(
+      new Judge.UnavailableError('judge-server is down', {
+        decisionId: 'decision-9',
+      }),
+    )
+  }
+}
+
+Deno.test('Guard.execute: rejects as unavailable, rather than failing, when the judge is temporarily unavailable', async () => {
+  const serviceProvider = new RecordingServiceProvider()
+  const guard = new Guard(
+    new UnavailableJudge(),
+    new FakeActionResolver(resolvedAction),
+    new FakeAuthenticator(alice),
+    serviceProvider,
+  )
+  const records = recordsOf(guard)
+
+  await guard.execute()
+
+  assertEquals(serviceProvider.calls, [Rejection.Unavailable])
+  assertEquals(records[0].outcome, 'rejected')
+  assertEquals(records[0].rejection, Rejection.Unavailable)
+  assertEquals(records[0].decisionId, 'decision-9')
+  assertEquals(records[0].error, 'judge-server is down')
+})

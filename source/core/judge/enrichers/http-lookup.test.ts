@@ -5,6 +5,7 @@ import {
   type HttpLookupDefinition,
   LookupError,
 } from './http-lookup.ts'
+import { UnavailableError } from '../unavailable-error.ts'
 
 const action = new Access.Action('billing.invoice_approve')
 
@@ -213,5 +214,32 @@ Deno.test('HttpLookup.enrich: does not cache a failed response', async () => {
 
       assertEquals(second.facts.directory, { active: true })
     },
+  )
+})
+
+Deno.test('HttpLookup.enrich: throws UnavailableError when the service answers that it is temporarily unavailable', async () => {
+  for (const status of [429, 502, 503, 504]) {
+    await withServer(
+      () => new Response('later', { status }),
+      async (origin) => {
+        const lookup = new HttpLookup(definition(origin))
+
+        await assertRejects(
+          () => lookup.enrich(action, new Access.Context({ subject: 'alice' })),
+          UnavailableError,
+          String(status),
+        )
+      },
+    )
+  }
+})
+
+Deno.test('HttpLookup.enrich: throws UnavailableError when the service cannot be reached', async () => {
+  const lookup = new HttpLookup(definition('http://localhost:1'))
+
+  await assertRejects(
+    () => lookup.enrich(action, new Access.Context({ subject: 'alice' })),
+    UnavailableError,
+    'could not reach',
   )
 })

@@ -11,7 +11,7 @@ export enum Rejection {
   Forbidden = 'forbidden',
   /** The judge denied a caller with no valid credential: authenticating may help. */
   Unauthenticated = 'unauthenticated',
-  /** The judge denied a caller whose credential could not be checked: retrying later may help. */
+  /** The caller's credential, or the judgement itself, could not be had for now: retrying later may help. */
   Unavailable = 'unavailable',
 }
 

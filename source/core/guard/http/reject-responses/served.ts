@@ -7,10 +7,9 @@ export class Served implements RejectResponse {
     private readonly contentType: string,
   ) {}
 
-  toResponse(status: number): Response {
-    return new Response(this.body, {
-      status,
-      headers: { 'content-type': this.contentType },
-    })
+  toResponse(status: number, headers: HeadersInit = {}): Response {
+    const merged = new Headers(headers)
+    merged.set('content-type', this.contentType)
+    return new Response(this.body, { status, headers: merged })
   }
 }

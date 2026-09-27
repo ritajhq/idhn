@@ -8,6 +8,7 @@ import { DenyOverridesStrategy } from './deny-overrides-strategy.ts'
 import type { Enricher } from './enricher.ts'
 import { Passthrough } from './enrichers/index.ts'
 import { Local } from './local.ts'
+import { UnavailableError } from './unavailable-error.ts'
 
 class FakePolicyRepository implements Policy.Repository {
   constructor(private readonly policies: Policy.Identifier[]) {}
@@ -255,4 +256,29 @@ Deno.test('Local.decide: records serialize to a flat, self-describing log entry'
     'results',
     'timestamp',
   ])
+})
+
+class UnavailableEnricher implements Enricher {
+  enrich(): Promise<Access.Context> {
+    return Promise.reject(new UnavailableError('directory is down'))
+  }
+}
+
+Deno.test('Local.decide: records a temporarily unavailable judgement as such, and names it in the error it throws', async () => {
+  const local = new Local(
+    new FakePolicyRepository([new Policy.Identifier('policy.a')]),
+    new FakePolicyEngine(new Map()),
+    new DenyOverridesStrategy(new Decision(false)),
+    new UnavailableEnricher(),
+  )
+  const records = recordsOf(local)
+
+  const error = await assertRejects(
+    () => local.decide(action, context),
+    UnavailableError,
+    'directory is down',
+  )
+
+  assertEquals(records[0].outcome, 'unavailable')
+  assertEquals(error.decisionId, records[0].decisionId)
 })

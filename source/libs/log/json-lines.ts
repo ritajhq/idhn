@@ -16,4 +16,16 @@ export class JsonLines {
   write(event: string, fields: object): void {
     this.writeLine(JSON.stringify({ event, ...fields }))
   }
+
+  /** Writes an error — typically one nothing else handled — as a single entry, stack trace included, instead of free-form text. */
+  writeError(event: string, error: unknown): void {
+    if (!(error instanceof Error)) {
+      return this.write(event, { error: String(error) })
+    }
+    this.write(event, {
+      error: error.message,
+      name: error.constructor.name,
+      stack: error.stack,
+    })
+  }
 }

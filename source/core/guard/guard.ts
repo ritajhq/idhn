@@ -1,6 +1,6 @@
 import { Delegate, type Emitter } from '@duesabati/evento'
 import * as Access from '@idhn/access'
-import type * as Judge from '@idhn/judge'
+import * as Judge from '@idhn/judge'
 import type { ActionResolver } from './action-resolver.ts'
 import type { Authenticator } from './authenticator.ts'
 import { Rejection } from './rejection.ts'
@@ -17,6 +17,10 @@ import type { ServiceProvider } from './service-provider.ts'
  * it is forbidden. Holds no infrastructure of its own — every
  * collaborator is injected as an interface, and none of them are generic
  * over the request's raw shape.
+ *
+ * A judge that is temporarily unavailable is a rejection, not a failure: the
+ * request is denied (fail closed) as unavailable, so its caller knows to try
+ * again. Any other failure propagates.
  *
  * How the request was handled, including a failure, is announced on
  * `OnHandled` before `execute` settles.
@@ -40,8 +44,12 @@ export class Guard {
     try {
       await this.guard(recording)
     } catch (error) {
-      recording.failed(error)
-      throw error
+      if (!(error instanceof Judge.UnavailableError)) {
+        recording.failed(error)
+        throw error
+      }
+      recording.unavailable(error)
+      await this.reject(Rejection.Unavailable, recording)
     } finally {
       this.handled.Invoke(recording.toRecord())
     }

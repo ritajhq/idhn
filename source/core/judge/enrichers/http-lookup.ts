@@ -1,5 +1,6 @@
 import type * as Access from '@idhn/access'
 import type { Enricher } from '../enricher.ts'
+import { TEMPORARY_STATUSES, UnavailableError } from '../unavailable-error.ts'
 
 /** One declared lookup: where to ask, which fact to store the answer as, and how to behave when the answer can't be had. */
 export interface HttpLookupDefinition {
@@ -11,10 +12,15 @@ export interface HttpLookupDefinition {
   url: string
   /** How long a response may be reused, per resolved URL. `0` disables caching. */
   ttlSeconds: number
-  /** When `true` a failed lookup (or a missing placeholder fact) just omits the fact; otherwise it throws `LookupError`. */
+  /**
+   * When `true` a failed lookup (or a missing placeholder fact) just omits the
+   * fact. Otherwise a service that is temporarily out of reach throws
+   * `UnavailableError`, and any other failure `LookupError`.
+   */
   optional: boolean
 }
 
+/** A lookup failed in a way asking again won't fix: a missing fact, a refused or malformed answer. */
 export class LookupError extends Error {}
 
 const PLACEHOLDER = /\{([^{}]+)\}/g
@@ -66,7 +72,7 @@ export class HttpLookup implements Enricher {
       if (this.definition.optional) {
         return OMITTED
       }
-      if (error instanceof LookupError) {
+      if (error instanceof LookupError || error instanceof UnavailableError) {
         throw error
       }
       throw new LookupError(
@@ -110,14 +116,10 @@ export class HttpLookup implements Enricher {
       return cached.data
     }
 
-    const response = await fetch(url, {
-      headers: { accept: 'application/json' },
-    })
+    const response = await this.fetchFrom(url)
     if (!response.ok) {
       await response.body?.cancel()
-      throw new LookupError(
-        `Lookup "${this.definition.as}" got ${response.status} ${response.statusText} from ${url.origin}`,
-      )
+      throw this.failureFor(response, url)
     }
 
     const data: unknown = await response.json()
@@ -128,6 +130,26 @@ export class HttpLookup implements Enricher {
       })
     }
     return data
+  }
+
+  private async fetchFrom(url: URL): Promise<Response> {
+    try {
+      return await fetch(url, { headers: { accept: 'application/json' } })
+    } catch (error) {
+      throw new UnavailableError(
+        `Lookup "${this.definition.as}" could not reach ${url.origin}`,
+        { cause: error },
+      )
+    }
+  }
+
+  private failureFor(response: Response, url: URL): Error {
+    const message =
+      `Lookup "${this.definition.as}" got ${response.status} ${response.statusText} from ${url.origin}`
+    if (TEMPORARY_STATUSES.has(response.status)) {
+      return new UnavailableError(message)
+    }
+    return new LookupError(message)
   }
 }
 

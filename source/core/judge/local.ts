@@ -7,6 +7,7 @@ import { DecisionRecording } from './decision-recording.ts'
 import type { DecisionStrategy } from './decision-strategy.ts'
 import type { Behavior } from './behavior.ts'
 import type { Enricher } from './enricher.ts'
+import { UnavailableError } from './unavailable-error.ts'
 
 /**
  * Answers "is this action allowed?" in-process, by resolving the policies
@@ -17,7 +18,8 @@ import type { Enricher } from './enricher.ts'
  *
  * Every judgement, including one that fails, is announced on `OnDecision`
  * before `decide` settles, identified by the same id as the `Decision` it
- * returns.
+ * returns — or, when it fails for being temporarily unavailable, as the
+ * `UnavailableError` it throws.
  */
 export class Local implements Behavior {
   private readonly decision = new Delegate<[DecisionRecord]>()
@@ -45,6 +47,9 @@ export class Local implements Behavior {
       return decision
     } catch (error) {
       this.decision.Invoke(recording.failed(error))
+      if (error instanceof UnavailableError) {
+        throw error.identifiedAs(recording.decisionId)
+      }
       throw error
     }
   }
