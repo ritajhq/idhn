@@ -35,7 +35,7 @@ deploy:
         PORT: "9100"
       development:
         sync+restart:
-          - app: guard/fake-service
+          - app: fake-service
             path: /app
 
     # Internal only: the gateway never routes to it, only the guard asks it.

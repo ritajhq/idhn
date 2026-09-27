@@ -2,7 +2,7 @@ FROM denoland/deno:alpine-2.9.7
 
 WORKDIR /app
 
-COPY --from=guard/fake-service main.js main.js
+COPY --from=fake-service main.js main.js
 
 EXPOSE 9100
 

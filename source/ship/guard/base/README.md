@@ -28,9 +28,8 @@ PID 1. Guard reads its config from the environment:
 
 - `SERVICE_MANIFEST_PATH` — action-resolution manifest (required)
 - `POLICY_BUNDLE_PATH` — the OPA policy bundle (required)
-- `KV_PATH` — where the policy registry's Deno KV store lives (optional,
-  defaults to Deno KV's own default location — set this to a mounted volume path
-  for persistence across container restarts)
+- `POLICY_REGISTRY_PATH` — YAML file associating actions with the policies that
+  govern them (required)
 - `POLICY_DATA_PATH` — JSON file loaded as Rego's `data` document, for
   slow-changing reference data such as allow-lists (optional)
 - `ENRICHMENT_PATH` — YAML file declaring HTTP lookups run before policies are
@@ -40,8 +39,6 @@ PID 1. Guard reads its config from the environment:
 - `REJECT_RESPONSE_URL` — custom rejection body (optional)
 - `PROXY_PORT` — the port guard listens on publicly (optional, default `8080`)
 
-Like `source/apps/judge/server/`, nothing bootstraps the policy registry's
-action/policy associations for you — some other integration-level step
-(migration, seed script, admin API — whatever fits the embedding service) is
-expected to write them into the KV store at `KV_PATH` through
-`Policy.Registries.Kv`'s `associate`, not by writing rows directly.
+Like `source/apps/judge/server/`, the policy registry's action/policy
+associations come from the file at `POLICY_REGISTRY_PATH`
+(`Policy.Registries.File`): ship it with the embedding service.

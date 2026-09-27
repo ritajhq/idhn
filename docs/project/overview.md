@@ -16,13 +16,13 @@ rationale.
 
 ## Apps at a glance
 
-| App                  | Package                    | Kind         | What it does                                                               |
-| -------------------- | -------------------------- | ------------ | -------------------------------------------------------------------------- |
-| `guard/standalone`   | `@idhn/guard-standalone`   | HTTP server  | Reverse proxy that asks a remote judge-server for each decision            |
-| `guard/embedded`     | `@idhn/guard-embedded`     | HTTP server  | Reverse proxy that runs its Judge in-process, with no separate judge       |
-| `guard/fake-service` | `@idhn/guard-fake-service` | HTTP server  | Stand-in protected service that echoes what it received (demo only)        |
-| `judge/server`       | `@idhn/judge-server`       | HTTP server  | Serves a `Judge.Behavior` over HTTP; internal only, never exposed publicly |
-| `web`                | —                          | Web frontend | React + React Router UI scaffold (early stage)                             |
+| App                | Package                  | Kind         | What it does                                                               |
+| ------------------ | ------------------------ | ------------ | -------------------------------------------------------------------------- |
+| `guard/standalone` | `@idhn/guard-standalone` | HTTP server  | Reverse proxy that asks a remote judge-server for each decision            |
+| `guard/embedded`   | `@idhn/guard-embedded`   | HTTP server  | Reverse proxy that runs its Judge in-process, with no separate judge       |
+| `fake-service`     | `@idhn/fake-service`     | HTTP server  | Stand-in protected service that echoes what it received (demo only)        |
+| `judge/server`     | `@idhn/judge-server`     | HTTP server  | Serves a `Judge.Behavior` over HTTP; internal only, never exposed publicly |
+| `web`              | —                        | Web frontend | React + React Router UI scaffold (early stage)                             |
 
 ## Deployment topologies
 
@@ -34,7 +34,9 @@ The Guard can reach a Judge in two ways. `Guard` depends only on the
    holds the policy bundle and owns the policy registry.
 2. **Single process (embedded):** `guard/embedded` composes its own Judge inside
    its own process. There is one process and one port, with no
-   `JUDGE_SERVER_URL`.
+   `JUDGE_SERVER_URL`. The `guard/base` Docker image ships this build: it starts
+   the Guard in the background, and the consuming image then runs its own
+   service in the foreground.
 
 ```
 standalone:  client ─▶ guard/standalone ─▶ upstream service
@@ -301,8 +303,9 @@ request is forwarded to `UPSTREAM_URL` or rejected.
 | `REJECT_RESPONSE_URL`   | no       | —       | URL (`file://`, `https://`, …) of a custom rejection body    |
 | `PROXY_PORT`            | no       | `8080`  | Public listening port                                        |
 
-Run it with `deno task start`. The demo ships it as `source/ship/demo/guard/`
-(see [Demo](#demo)).
+Run it with `deno task start`. It is shipped as
+`source/ship/guard/standalone/Dockerfile`, and the demo ships it with its
+configuration as `source/ship/demo/guard/` (see [Demo](#demo)).
 
 ### `guard/embedded`
 
@@ -326,7 +329,9 @@ permission, since the file registry writes associations back to its file.
 | `REJECT_RESPONSE_URL`   | no       | —       | Custom rejection body                       |
 | `PROXY_PORT`            | no       | `8080`  | Public listening port                       |
 
-It has no image yet.
+Its build is shipped in the `guard/base` image (`source/ship/guard/base/`).
+Services extend that image (`FROM guard/base`) and call
+`/opt/guard/start-guard.sh` from their own `CMD`.
 
 ### `judge/server`
 
@@ -346,14 +351,17 @@ It only reads the registry and never writes to it.
 | `MAX_DECISION_MS`      | no       | `5000`  | Longest a judgement may take for a caller that sends no deadline |
 | `JUDGE_PORT`           | no       | `8081`  | Listening port                                                   |
 
-Run it with `deno task start`. The demo ships it as `source/ship/demo/judge/`.
+Run it with `deno task start`. It is shipped as
+`source/ship/judge/server/Dockerfile`, and the demo ships it with its
+configuration as `source/ship/demo/judge/`.
 
-### `guard/fake-service`
+### `fake-service`
 
 A small stand-in for a protected service, used only for manual testing. It
 replies with an HTML page that shows the method, path, query, headers and body
 it received, so you can tell that a request made it through the Guard. It
-listens on `PORT` (default `9100`). The demo ships it as
+listens on `PORT` (default `9100`). It is shipped as
+`source/ship/fake-service/Dockerfile`, and the demo ships it as
 `source/ship/demo/service/`.
 
 ### Demo
@@ -400,5 +408,6 @@ none of its features are defined.
 - `config.ts` validates every environment variable up front and throws a
   `ConfigError` for a missing or invalid value. It reads through an `EnvReader`
   (defaulting to `Deno.env`).
-- Packaging lives in `source/ship/`. The Dockerfiles copy prebuilt `main.js`
-  artifacts rather than building from source.
+- Packaging lives in `source/ship/`, in a directory that mirrors the app path.
+  The Dockerfiles copy prebuilt `main.js` artifacts rather than building from
+  source.

@@ -3,7 +3,7 @@ build:
     kit: deno.bundle
   guard/embedded:
     kit: deno.bundle
-  guard/fake-service:
+  fake-service:
     kit: deno.bundle
   judge/server:
     kit: deno.bundle

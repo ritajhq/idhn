@@ -1,9 +1,9 @@
 # Demo
 
-A protected service (`guard/fake-service`) behind the standalone guard, which
-asks a separate judge-server for every decision. Only the guard is reachable,
-through a gateway on `http://demo.localhost`; the judge-server stays on the
-stack's internal network.
+A protected service (`fake-service`) behind the standalone guard, which asks a
+separate judge-server for every decision. Only the guard is reachable, through a
+gateway on `http://demo.localhost`; the judge-server stays on the stack's
+internal network.
 
 ## Run it with ens
 
@@ -48,7 +48,7 @@ Useful when iterating on one app without packing images.
 
 ```sh
 # terminal 1: the protected service
-cd source/apps/guard/fake-service
+cd source/apps/fake-service
 PORT=9100 deno task start
 
 # terminal 2: the judge server, holding the policy bundle and the policy

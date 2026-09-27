@@ -35,7 +35,7 @@ services:
       PORT: '9100'
     develop:
       watch:
-        - path: guard/fake-service
+        - path: fake-service
           target: /app
           action: sync+restart
   gateway:
