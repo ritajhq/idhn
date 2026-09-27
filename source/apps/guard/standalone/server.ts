@@ -29,6 +29,7 @@ export class Server {
     private readonly authentication: Authenticators.Scheme,
     private readonly upstreamUrl: URL,
     private readonly rejectResponse: RejectResponse,
+    private readonly judgeTimeoutMs: number,
   ) {}
 
   get OnRequestHandled(): Emitter<[HttpRequestRecord]> {
@@ -53,6 +54,7 @@ export class Server {
       actionResolver,
       this.authentication.authenticatorFor(request),
       serviceProvider,
+      this.judgeTimeoutMs,
     )
     guard.OnHandled.Do((record) =>
       this.requestHandled.Invoke(new HttpRequestRecord(request, record))

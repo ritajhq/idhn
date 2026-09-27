@@ -1,6 +1,7 @@
 import { assertEquals, assertRejects } from '@std/assert'
 import * as Access from '@idhn/access'
 import { Client, RequestError } from './client.ts'
+import { Deadline } from '../deadline.ts'
 import { UnavailableError } from '../unavailable-error.ts'
 
 async function withServer(
@@ -38,6 +39,7 @@ Deno.test('Client.decide: posts the action and context, and resolves with the de
       const decision = await client.decide(
         new Access.Action('demo.home.visit'),
         new Access.Context({ vip: 'true' }),
+        Deadline.in(2000),
       )
 
       assertEquals(decision.allowed, true)
@@ -57,6 +59,7 @@ Deno.test('Client.decide: throws RequestError when the server responds with a no
           client.decide(
             new Access.Action('demo.home.visit'),
             new Access.Context(),
+            Deadline.in(2000),
           ),
         RequestError,
       )
@@ -77,6 +80,7 @@ Deno.test('Client.decide: throws UnavailableError naming the failed decision whe
           new Client(server).decide(
             new Access.Action('demo.home.visit'),
             new Access.Context(),
+            Deadline.in(2000),
           ),
         UnavailableError,
       )
@@ -92,6 +96,7 @@ Deno.test('Client.decide: throws UnavailableError when the server cannot be reac
       new Client(new URL('http://localhost:1/')).decide(
         new Access.Action('demo.home.visit'),
         new Access.Context(),
+        Deadline.in(2000),
       ),
     UnavailableError,
     'could not be reached',
@@ -107,13 +112,37 @@ Deno.test('Client.decide: throws UnavailableError when the server does not answe
     async (server) => {
       await assertRejects(
         () =>
-          new Client(server, 50).decide(
+          new Client(server).decide(
             new Access.Action('demo.home.visit'),
             new Access.Context(),
+            Deadline.in(50),
           ),
         UnavailableError,
         'within 50ms',
       )
     },
+  )
+})
+
+Deno.test('Client.decide: tells the server how long it will still wait', async () => {
+  let sent: number | undefined
+  await withServer(
+    (request) => {
+      sent = Number(request.headers.get('x-deadline-ms'))
+      return Response.json({ allowed: true })
+    },
+    async (server) => {
+      await new Client(server).decide(
+        new Access.Action('demo.home.visit'),
+        new Access.Context(),
+        Deadline.in(2000),
+      )
+    },
+  )
+
+  assertEquals(
+    sent !== undefined && sent > 1900 && sent <= 2000,
+    true,
+    `sent ${sent}`,
   )
 })

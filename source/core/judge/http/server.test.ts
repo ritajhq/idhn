@@ -3,6 +3,7 @@ import type * as Access from '@idhn/access'
 import { Decision } from '../decision.ts'
 import type { Behavior } from '../behavior.ts'
 import { Server } from './server.ts'
+import { Deadline } from '../deadline.ts'
 import { UnavailableError } from '../unavailable-error.ts'
 
 class FakeJudge implements Behavior {
@@ -115,4 +116,44 @@ Deno.test('Server.handle: lets any other failure propagate, for the process to a
     Error,
     'entrypoint missing',
   )
+})
+
+class DeadlineCapturingJudge implements Behavior {
+  received: Deadline | undefined
+
+  decide(
+    _action: Access.Action,
+    _context: Access.Context,
+    deadline: Deadline,
+  ): Promise<Decision> {
+    this.received = deadline
+    return Promise.resolve(new Decision(true))
+  }
+}
+
+function decideRequestWith(headers: Record<string, string>): Request {
+  return new Request('http://judge.test/decide', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ action: 'demo.home.visit', context: {} }),
+  })
+}
+
+Deno.test("Server.handle: judges within the caller's remaining wait, less the time the answer needs to travel back", async () => {
+  const judge = new DeadlineCapturingJudge()
+
+  await new Server(judge).handle(decideRequestWith({ 'x-deadline-ms': '2000' }))
+
+  assertEquals(judge.received?.ms, 1900)
+})
+
+Deno.test('Server.handle: leaves the deadline to the judge when the caller says nothing about how long it will wait', async () => {
+  const cases: Record<string, string>[] = [{}, { 'x-deadline-ms': 'soon' }]
+  for (const headers of cases) {
+    const judge = new DeadlineCapturingJudge()
+
+    await new Server(judge).handle(decideRequestWith(headers))
+
+    assertEquals(judge.received?.ms, Number.POSITIVE_INFINITY)
+  }
 })

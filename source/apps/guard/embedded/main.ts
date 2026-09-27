@@ -26,7 +26,6 @@ const judge = new Judge.Local(
   engine,
   new Judge.DenyOverridesStrategy(new Judge.Decision(false)),
   enricher,
-  config.decisionDeadlineMs,
 )
 const authentication = new Authenticators.Schemes({
   none: () => new Authenticators.Anonymous(),
@@ -39,6 +38,7 @@ const server = new Server(
   authentication,
   config.upstreamUrl,
   rejectResponse,
+  config.judgeTimeoutMs,
 )
 
 const log = new Log.JsonLines()

@@ -678,21 +678,26 @@ the status only tells the caller whether retrying makes sense.
   answers it `503` with that id in the body; `Guard` treats it as a rejection
   (`Rejection.Unavailable`), not a failure, and records the id, so the two log
   lines still correlate.
-- **Timeouts.** Every outbound call on the request path waits at most 2 seconds
-  by default for the whole answer (connect, headers and body), and a call that
-  times out counts as unavailable: the judge client (`JUDGE_TIMEOUT_MS`), each
-  enrichment lookup (`timeout_ms` in the enrichment file) and the session-cookie
-  lookup (`timeout_ms` in the manifest's `authentication`). The upstream
-  `forward()` has none, since slow upstream responses can be legitimate.
-- **Decision deadline.** `Judge.Local` reaches each judgement within
-  `deadlineMs` (`DECISION_DEADLINE_MS`, default 1500) or fails it as
-  unavailable. The deadline is an `AbortSignal` handed to the enrichers
-  (`Enricher.enrich(action, context, deadline)`): `Chain` starts no enricher
-  after it, `HttpLookup` aborts its in-flight request. `Local` also races the
-  judgement against it, so a judgement is answered in time even if an enricher
-  ignores it. Keeping it below the guard's `JUDGE_TIMEOUT_MS` means the guard
-  always receives the judge's `503` and its `decisionId`, however many slow
-  lookups run.
+- **Timeouts.** Every outbound call on the request path has a limit on its whole
+  answer (connect, headers and body), and a call that times out counts as
+  unavailable: the judgement (`JUDGE_TIMEOUT_MS`, default 5 seconds), each
+  enrichment lookup (`timeout_ms` in the enrichment file, default 2 seconds) and
+  the session-cookie lookup (`timeout_ms` in the manifest's `authentication`,
+  default 2 seconds). The upstream `forward()` has none, since slow upstream
+  responses can be legitimate.
+- **Deadline propagation.** A judgement has one deadline, set where the waiting
+  starts: `Guard` turns its `JUDGE_TIMEOUT_MS` into a `Judge.Deadline` and
+  passes it to `Behavior.decide(action, context, deadline)`. `Judge.Http.Client`
+  aborts at it and sends the time left as `x-deadline-ms`; `Judge.Http.Server`
+  makes that the judge's deadline, less a 100ms margin for the answer to travel
+  back. `Judge.Local` hands it to the enrichers as an `AbortSignal` (`Chain`
+  starts none after it, `HttpLookup` aborts its request) and races the judgement
+  against it, so an enricher that ignores it can't delay the answer. The guard
+  therefore always receives the judge's `503` and its `decisionId`, however many
+  slow lookups run, with no setting to keep in sync. The judge-server's
+  `MAX_DECISION_MS` (default 5000) only bounds callers that send no deadline. (A
+  first version gave the judge its own `DECISION_DEADLINE_MS`, which had to be
+  kept below the guard's timeout by hand; propagation replaced it.)
 - **Anything else → `500`.** A policy missing from the bundle, a lookup that
   gets `404`/`500` or a malformed answer, a missing placeholder fact, or a bug
   propagates. Each app's `main.ts` gives `Deno.serve` an `onError` that writes

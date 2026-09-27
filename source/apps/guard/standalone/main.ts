@@ -8,10 +8,7 @@ import { Server } from './server.ts'
 const config = new ConfigLoader(new Environment.Reader(Deno.env)).load()
 
 const manifest = await loadManifestFile(config.manifestPath, 'http')
-const judge = new Judge.Http.Client(
-  config.judgeServerUrl,
-  config.judgeTimeoutMs,
-)
+const judge = new Judge.Http.Client(config.judgeServerUrl)
 const rejectResponse = await new RejectResponses.Source(
   config.rejectResponseUrl,
 ).load()
@@ -27,6 +24,7 @@ const server = new Server(
   authentication,
   config.upstreamUrl,
   rejectResponse,
+  config.judgeTimeoutMs,
 )
 
 const log = new Log.JsonLines()

@@ -10,7 +10,7 @@ export interface Config {
 }
 
 const DEFAULT_PORT = 8080
-const DEFAULT_JUDGE_TIMEOUT_MS = 2000
+const DEFAULT_JUDGE_TIMEOUT_MS = 5000
 
 /** Builds the server's configuration from the environment. Throws `Environment.InvalidError` on any missing or invalid value. */
 export class ConfigLoader {

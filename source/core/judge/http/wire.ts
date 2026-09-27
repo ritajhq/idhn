@@ -1,3 +1,10 @@
+/**
+ * How many milliseconds the caller of `POST /decide` will still wait for its
+ * answer, measured when the request is sent. Relative rather than a point in
+ * time, so the two processes' clocks never need to agree.
+ */
+export const DEADLINE_HEADER = 'x-deadline-ms'
+
 /** The `POST /decide` request/response bodies shared by the client and the handler. */
 export interface DecideRequestBody {
   action: string

@@ -1,4 +1,5 @@
 export { Decision } from './decision.ts'
+export { Deadline } from './deadline.ts'
 export {
   type DecisionOutcome,
   DecisionRecord,

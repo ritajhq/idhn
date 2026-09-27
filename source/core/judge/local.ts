@@ -7,10 +7,8 @@ import { DecisionRecording } from './decision-recording.ts'
 import type { DecisionStrategy } from './decision-strategy.ts'
 import type { Behavior } from './behavior.ts'
 import type { Enricher } from './enricher.ts'
+import type { Deadline } from './deadline.ts'
 import { UnavailableError } from './unavailable-error.ts'
-
-/** How long a judgement may take when the judge is not told otherwise. */
-const DEFAULT_DEADLINE_MS = 1500
 
 /**
  * Answers "is this action allowed?" in-process, by resolving the policies
@@ -24,11 +22,11 @@ const DEFAULT_DEADLINE_MS = 1500
  * returns — or, when it fails for being temporarily unavailable, as the
  * `UnavailableError` it throws.
  *
- * Every judgement is reached within `deadlineMs` or not at all: past it, the
- * enrichers are told to abandon what they are still gathering, and the
- * judgement fails as unavailable right away, whether or not they listen. A
- * caller waiting on the judge with a longer timeout of its own therefore
- * always gets an answer, and the id of the judgement it was about.
+ * Every judgement is reached by the asker's deadline — or `maxMs`, if that
+ * comes first — or not at all: past it, the enrichers are told to abandon
+ * what they are still gathering, and the judgement fails as unavailable right
+ * away, whether or not they listen. The asker therefore always gets an
+ * answer while it is still waiting, and the id of the judgement it was about.
  */
 export class Local implements Behavior {
   private readonly decision = new Delegate<[DecisionRecord]>()
@@ -38,7 +36,8 @@ export class Local implements Behavior {
     private readonly engine: Policy.Engine,
     private readonly strategy: DecisionStrategy,
     private readonly enricher: Enricher,
-    private readonly deadlineMs: number = DEFAULT_DEADLINE_MS,
+    /** The longest any judgement may take, whatever the asker would wait. */
+    private readonly maxMs: number = Number.POSITIVE_INFINITY,
   ) {}
 
   get OnDecision(): Emitter<[DecisionRecord]> {
@@ -48,9 +47,10 @@ export class Local implements Behavior {
   async decide(
     action: Access.Action,
     context: Access.Context,
+    askersDeadline: Deadline,
   ): Promise<Decision> {
     const recording = new DecisionRecording(action, context)
-    const deadline = AbortSignal.timeout(this.deadlineMs)
+    const deadline = askersDeadline.within(this.maxMs)
     try {
       const decision = (await this.withinDeadline(
         this.judge(action, context, recording, deadline),
@@ -59,7 +59,9 @@ export class Local implements Behavior {
       this.decision.Invoke(recording.decided(decision))
       return decision
     } catch (error) {
-      const failure = deadline.aborted ? this.pastDeadline(error) : error
+      const failure = deadline.passed
+        ? this.pastDeadline(error, deadline)
+        : error
       this.decision.Invoke(recording.failed(failure))
       if (failure instanceof UnavailableError) {
         throw failure.identifiedAs(recording.decisionId)
@@ -71,20 +73,21 @@ export class Local implements Behavior {
   /** `judgement`'s outcome, or a rejection as soon as `deadline` aborts, whichever comes first. A judgement still running then is left to settle unobserved. */
   private withinDeadline<T>(
     judgement: Promise<T>,
-    deadline: AbortSignal,
+    deadline: Deadline,
   ): Promise<T> {
+    const { signal } = deadline
     return new Promise<T>((resolve, reject) => {
-      const abandon = () => reject(deadline.reason)
-      deadline.addEventListener('abort', abandon, { once: true })
+      const abandon = () => reject(signal.reason)
+      signal.addEventListener('abort', abandon, { once: true })
       judgement.then(resolve, reject).finally(() =>
-        deadline.removeEventListener('abort', abandon)
+        signal.removeEventListener('abort', abandon)
       )
     })
   }
 
-  private pastDeadline(error: unknown): UnavailableError {
+  private pastDeadline(error: unknown, deadline: Deadline): UnavailableError {
     return new UnavailableError(
-      `The judgement was not reached within ${this.deadlineMs}ms`,
+      `The judgement was not reached within ${deadline.ms}ms`,
       { cause: error },
     )
   }
@@ -93,14 +96,18 @@ export class Local implements Behavior {
     action: Access.Action,
     context: Access.Context,
     recording: DecisionRecording,
-    deadline: AbortSignal,
+    deadline: Deadline,
   ): Promise<Decision> {
     const policies = await this.policies.findPoliciesFor(action)
     if (policies.length === 0) {
       return this.strategy.combine([])
     }
 
-    const enriched = await this.enricher.enrich(action, context, deadline)
+    const enriched = await this.enricher.enrich(
+      action,
+      context,
+      deadline.signal,
+    )
     recording.evaluatedAgainst(enriched)
     const results: Policy.Result[] = await Promise.all(
       policies.map((policy) => this.engine.evaluate(policy, enriched)),

@@ -266,29 +266,6 @@ Deno.test('HttpLookup.enrich: throws UnavailableError when the service cannot be
   )
 })
 
-Deno.test('HttpLookup.enrich: throws UnavailableError when the service does not answer within the timeout', async () => {
-  await withServer(
-    async () => {
-      await new Promise((resolve) => setTimeout(resolve, 200))
-      return Response.json({ active: true })
-    },
-    async (origin) => {
-      const lookup = new HttpLookup(definition(origin, { timeoutMs: 50 }))
-
-      await assertRejects(
-        () =>
-          lookup.enrich(
-            action,
-            new Access.Context({ subject: 'alice' }),
-            noDeadline,
-          ),
-        UnavailableError,
-        'within 50ms',
-      )
-    },
-  )
-})
-
 Deno.test("HttpLookup.enrich: abandons the lookup when the judgement's deadline passes", async () => {
   await withServer(
     async () => {
@@ -307,6 +284,29 @@ Deno.test("HttpLookup.enrich: abandons the lookup when the judgement's deadline 
           ),
         UnavailableError,
         "cut short by the judgement's deadline",
+      )
+    },
+  )
+})
+
+Deno.test('HttpLookup.enrich: throws UnavailableError when the service does not answer within the timeout', async () => {
+  await withServer(
+    async () => {
+      await new Promise((resolve) => setTimeout(resolve, 200))
+      return Response.json({ active: true })
+    },
+    async (origin) => {
+      const lookup = new HttpLookup(definition(origin, { timeoutMs: 50 }))
+
+      await assertRejects(
+        () =>
+          lookup.enrich(
+            action,
+            new Access.Context({ subject: 'alice' }),
+            noDeadline,
+          ),
+        UnavailableError,
+        'within 50ms',
       )
     },
   )

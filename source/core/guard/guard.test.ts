@@ -393,3 +393,31 @@ Deno.test('Guard.execute: still fails on any other forwarding error', async () =
 
   assertEquals(records[0].outcome, 'failed')
 })
+
+class DeadlineCapturingJudge implements Judge.Behavior {
+  received: Judge.Deadline | undefined
+
+  decide(
+    _action: Access.Action,
+    _context: Access.Context,
+    deadline: Judge.Deadline,
+  ): Promise<Judge.Decision> {
+    this.received = deadline
+    return Promise.resolve(new Judge.Decision(true))
+  }
+}
+
+Deno.test('Guard.execute: hands the judge its own judge timeout as the deadline', async () => {
+  const judge = new DeadlineCapturingJudge()
+  const guard = new Guard(
+    judge,
+    new FakeActionResolver(resolvedAction),
+    new FakeAuthenticator(alice),
+    new RecordingServiceProvider(),
+    750,
+  )
+
+  await guard.execute()
+
+  assertEquals(judge.received?.ms, 750)
+})

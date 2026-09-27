@@ -27,9 +27,16 @@ import {
  * allowed request to: it is answered as unreachable. Any other failure
  * propagates.
  *
+ * The guard waits at most `judgeTimeoutMs` for a judgement. That wait is the
+ * deadline the judge is handed, and every hop behind it answers within it, so
+ * the judge's answer — an unavailable one included — always arrives in time.
+ *
  * How the request was handled, including a failure, is announced on
  * `OnHandled` before `execute` settles.
  */
+/** How long a guard waits for a judgement when not told otherwise. */
+const DEFAULT_JUDGE_TIMEOUT_MS = 5000
+
 export class Guard {
   private readonly handled = new Delegate<[RequestRecord]>()
 
@@ -38,6 +45,7 @@ export class Guard {
     private readonly actionResolver: ActionResolver,
     private readonly authenticator: Authenticator,
     private readonly serviceProvider: ServiceProvider,
+    private readonly judgeTimeoutMs: number = DEFAULT_JUDGE_TIMEOUT_MS,
   ) {}
 
   get OnHandled(): Emitter<[RequestRecord]> {
@@ -72,7 +80,11 @@ export class Guard {
     const context = resolved.context.with({
       [Access.Identity.FACT]: identity.toFact(),
     })
-    const decision = await this.judge.decide(resolved.action, context)
+    const decision = await this.judge.decide(
+      resolved.action,
+      context,
+      Judge.Deadline.in(this.judgeTimeoutMs),
+    )
     recording.judged(decision)
 
     if (decision.allowed) {

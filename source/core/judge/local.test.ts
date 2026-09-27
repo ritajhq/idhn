@@ -2,6 +2,7 @@ import { assertEquals, assertNotEquals, assertRejects } from '@std/assert'
 import * as Access from '@idhn/access'
 import * as Policy from '@idhn/policy'
 import { Decision } from './decision.ts'
+import { Deadline } from './deadline.ts'
 import type { DecisionRecord } from './decision-record.ts'
 import type { DecisionStrategy } from './decision-strategy.ts'
 import { DenyOverridesStrategy } from './deny-overrides-strategy.ts'
@@ -55,7 +56,7 @@ Deno.test("Local.decide: resolves policies, evaluates each, and returns the stra
   const strategy = new DenyOverridesStrategy(new Decision(false))
 
   const local = new Local(repository, engine, strategy, new Passthrough())
-  const decision = await local.decide(action, context)
+  const decision = await local.decide(action, context, Deadline.unbounded())
 
   assertEquals(decision.allowed, true)
   assertEquals(decision.results.length, 2)
@@ -70,7 +71,7 @@ Deno.test('Local.decide: passes an empty result set to the strategy when no poli
   const strategy = new StubDecisionStrategy(fallback)
 
   const local = new Local(repository, engine, strategy, new Passthrough())
-  const decision = await local.decide(action, context)
+  const decision = await local.decide(action, context, Deadline.unbounded())
 
   assertEquals(decision.allowed, fallback.allowed)
   assertEquals(decision.results, fallback.results)
@@ -86,7 +87,7 @@ Deno.test('Local.decide: delegates entirely to the injected strategy, never deci
   const strategy = new StubDecisionStrategy(forcedDeny)
 
   const local = new Local(repository, engine, strategy, new Passthrough())
-  const decision = await local.decide(action, context)
+  const decision = await local.decide(action, context, Deadline.unbounded())
 
   assertEquals(decision.allowed, forcedDeny.allowed)
   assertEquals(decision.results, forcedDeny.results)
@@ -132,7 +133,7 @@ Deno.test('Local.decide: evaluates every governing policy against the enriched c
     enricher,
   )
 
-  await local.decide(action, context)
+  await local.decide(action, context, Deadline.unbounded())
 
   assertEquals(enricher.calls, 1)
   assertEquals(engine.received.length, 2)
@@ -153,7 +154,7 @@ Deno.test('Local.decide: does not enrich when no policy governs the action', asy
     enricher,
   )
 
-  await local.decide(action, context)
+  await local.decide(action, context, Deadline.unbounded())
 
   assertEquals(enricher.calls, 0)
 })
@@ -180,7 +181,7 @@ Deno.test('Local.decide: identifies each decision, and records it under the same
   )
   const records = recordsOf(local)
 
-  const decision = await local.decide(action, context)
+  const decision = await local.decide(action, context, Deadline.unbounded())
 
   assertEquals(records.length, 1)
   const [record] = records
@@ -206,8 +207,8 @@ Deno.test('Local.decide: gives every decision its own id, even when the strategy
   )
   const records = recordsOf(local)
 
-  const first = await local.decide(action, context)
-  const second = await local.decide(action, context)
+  const first = await local.decide(action, context, Deadline.unbounded())
+  const second = await local.decide(action, context, Deadline.unbounded())
 
   assertNotEquals(first.id, second.id)
   assertEquals(records.map((record) => record.outcome), ['denied', 'denied'])
@@ -224,7 +225,7 @@ Deno.test('Local.decide: records a judgement that fails, then fails the same way
   const records = recordsOf(local)
 
   await assertRejects(
-    () => local.decide(action, context),
+    () => local.decide(action, context, Deadline.unbounded()),
     Error,
     'directory unreachable',
   )
@@ -244,7 +245,7 @@ Deno.test('Local.decide: records serialize to a flat, self-describing log entry'
   )
   const records = recordsOf(local)
 
-  await local.decide(action, context)
+  await local.decide(action, context, Deadline.unbounded())
 
   const entry = JSON.parse(JSON.stringify(records[0]))
   assertEquals(Object.keys(entry).sort(), [
@@ -274,7 +275,7 @@ Deno.test('Local.decide: records a temporarily unavailable judgement as such, an
   const records = recordsOf(local)
 
   const error = await assertRejects(
-    () => local.decide(action, context),
+    () => local.decide(action, context, Deadline.unbounded()),
     UnavailableError,
     'directory is down',
   )
@@ -324,7 +325,7 @@ Deno.test('Local.decide: fails as unavailable once the deadline passes, telling 
   const records = recordsOf(local)
 
   const error = await assertRejects(
-    () => local.decide(action, context),
+    () => local.decide(action, context, Deadline.unbounded()),
     UnavailableError,
     'not reached within 50ms',
   )
@@ -339,11 +340,26 @@ Deno.test('Local.decide: answers by the deadline even when an enricher ignores i
   const started = performance.now()
 
   await assertRejects(
-    () => local.decide(action, context),
+    () => local.decide(action, context, Deadline.unbounded()),
     UnavailableError,
     'not reached within 50ms',
   )
 
   const elapsed = performance.now() - started
   assertEquals(elapsed < 500, true, `took ${elapsed}ms`)
+})
+
+Deno.test("Local.decide: fails as unavailable by the asker's deadline, even with no limit of its own", async () => {
+  const local = new Local(
+    new FakePolicyRepository([new Policy.Identifier('policy.a')]),
+    new FakePolicyEngine(new Map()),
+    new DenyOverridesStrategy(new Decision(false)),
+    new HungEnricher(),
+  )
+
+  await assertRejects(
+    () => local.decide(action, context, Deadline.in(50)),
+    UnavailableError,
+    'not reached within 50ms',
+  )
 })

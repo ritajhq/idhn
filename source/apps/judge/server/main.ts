@@ -28,7 +28,7 @@ const judge = new Judge.Local(
   engine,
   deny_strategy,
   enricher,
-  config.decisionDeadlineMs,
+  config.maxDecisionMs,
 )
 
 const log = new Log.JsonLines()

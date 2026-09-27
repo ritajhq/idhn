@@ -1,50 +1,47 @@
 import type * as Access from '@idhn/access'
+import type { Deadline } from '../deadline.ts'
 import { Decision } from '../decision.ts'
 import type { Behavior } from '../behavior.ts'
 import { TEMPORARY_STATUSES, UnavailableError } from '../unavailable-error.ts'
-import type {
-  DecideRequestBody,
-  DecideResponseBody,
-  UnavailableResponseBody,
+import {
+  DEADLINE_HEADER,
+  type DecideRequestBody,
+  type DecideResponseBody,
+  type UnavailableResponseBody,
 } from './wire.ts'
-
-/** How long to wait for the judge-server's whole answer by default. */
-const DEFAULT_TIMEOUT_MS = 2000
 
 /** The judge-server failed in a way asking again won't fix. */
 export class RequestError extends Error {}
 
 /**
  * A `Behavior` that delegates to a remote judge-server over HTTP, keeping it
- * out of the process handling public traffic. A judge-server that can't be
- * reached, doesn't answer within `timeoutMs`, or answers that it is
- * temporarily unavailable, fails the judgement with `UnavailableError`; any
- * other failure with `RequestError`.
+ * out of the process handling public traffic. The deadline travels with the
+ * request, so the judge-server answers while this client is still waiting. A
+ * judge-server that can't be reached, doesn't answer by the deadline, or
+ * answers that it is temporarily unavailable, fails the judgement with
+ * `UnavailableError`; any other failure with `RequestError`.
  */
 export class Client implements Behavior {
-  constructor(
-    private readonly server: URL,
-    private readonly timeoutMs: number = DEFAULT_TIMEOUT_MS,
-  ) {}
+  constructor(private readonly server: URL) {}
 
   async decide(
     action: Access.Action,
     context: Access.Context,
+    deadline: Deadline,
   ): Promise<Decision> {
     const body: DecideRequestBody = {
       action: action.name,
       context: { ...context.facts },
     }
 
-    const signal = AbortSignal.timeout(this.timeoutMs)
     try {
-      return await this.exchange(body, signal)
+      return await this.exchange(body, deadline)
     } catch (error) {
-      if (!signal.aborted) {
+      if (!deadline.passed) {
         throw error
       }
       throw new UnavailableError(
-        `Judge server at ${this.server.origin} did not answer within ${this.timeoutMs}ms`,
+        `Judge server at ${this.server.origin} did not answer within ${deadline.ms}ms`,
         { cause: error },
       )
     }
@@ -52,9 +49,9 @@ export class Client implements Behavior {
 
   private async exchange(
     body: DecideRequestBody,
-    signal: AbortSignal,
+    deadline: Deadline,
   ): Promise<Decision> {
-    const response = await this.post(body, signal)
+    const response = await this.post(body, deadline)
     if (!response.ok) {
       throw await this.failureFor(response)
     }
@@ -65,14 +62,17 @@ export class Client implements Behavior {
 
   private async post(
     body: DecideRequestBody,
-    signal: AbortSignal,
+    deadline: Deadline,
   ): Promise<Response> {
     try {
       return await fetch(new URL('/decide', this.server), {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: {
+          'content-type': 'application/json',
+          [DEADLINE_HEADER]: String(Math.floor(deadline.remainingMs())),
+        },
         body: JSON.stringify(body),
-        signal,
+        signal: deadline.signal,
       })
     } catch (error) {
       throw new UnavailableError(

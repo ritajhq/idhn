@@ -44,6 +44,7 @@ Deno.test('Judge + OPA.PolicyEngine + Policy.Registries.InMemory: allows when th
   const decision = await judge.decide(
     action,
     new Access.Context({ subject: 'alice', amount: 500, flagged: false }),
+    Judge.Deadline.unbounded(),
   )
 
   assertEquals(decision.allowed, true)
@@ -56,6 +57,7 @@ Deno.test('Judge + OPA.PolicyEngine + Policy.Registries.InMemory: denies when th
   const decision = await judge.decide(
     action,
     new Access.Context({ subject: 'alice', amount: 5000, flagged: false }),
+    Judge.Deadline.unbounded(),
   )
 
   assertEquals(decision.allowed, false)
@@ -67,6 +69,7 @@ Deno.test('Judge + OPA.PolicyEngine + Policy.Registries.InMemory: the fraud over
   const decision = await judge.decide(
     action,
     new Access.Context({ subject: 'alice', amount: 500, flagged: true }),
+    Judge.Deadline.unbounded(),
   )
 
   assertEquals(decision.allowed, false)
@@ -88,6 +91,7 @@ Deno.test('Judge + OPA.PolicyEngine + Policy.Registries.InMemory: denies when no
   const decision = await judge.decide(
     action,
     new Access.Context({ subject: 'alice', amount: 500 }),
+    Judge.Deadline.unbounded(),
   )
 
   assertEquals(decision.allowed, false)
@@ -129,10 +133,12 @@ Deno.test('Judge + OPA.PolicyEngine + HttpLookup: a policy decides on a fact fet
     const active = await judge.decide(
       directoryAction,
       new Access.Context({ subject: 'alice' }),
+      Judge.Deadline.unbounded(),
     )
     const inactive = await judge.decide(
       directoryAction,
       new Access.Context({ subject: 'mallory' }),
+      Judge.Deadline.unbounded(),
     )
 
     assertEquals(active.allowed, true)
@@ -181,15 +187,25 @@ function authenticatedAs(
 Deno.test('Judge + OPA.PolicyEngine + auth: a policy requiring authentication reads the identity and its claims', async () => {
   const { judge, action } = await judgeGoverning('profile.read')
 
-  const verified = await judge.decide(action, authenticatedAs(alice))
-  const notVerified = await judge.decide(action, authenticatedAs(unverified))
+  const verified = await judge.decide(
+    action,
+    authenticatedAs(alice),
+    Judge.Deadline.unbounded(),
+  )
+  const notVerified = await judge.decide(
+    action,
+    authenticatedAs(unverified),
+    Judge.Deadline.unbounded(),
+  )
   const anonymous = await judge.decide(
     action,
     authenticatedAs(Access.Identity.anonymous()),
+    Judge.Deadline.unbounded(),
   )
   const invalid = await judge.decide(
     action,
     authenticatedAs(Access.Identity.invalid()),
+    Judge.Deadline.unbounded(),
   )
 
   assertEquals(verified.allowed, true)
@@ -203,11 +219,20 @@ Deno.test('Judge + OPA.PolicyEngine + auth: a role the identity provider cannot 
     roles: { 'u-1': ['auditor'], 'u-2': ['viewer'] },
   })
 
-  const auditor = await judge.decide(action, authenticatedAs(alice))
-  const viewer = await judge.decide(action, authenticatedAs(unverified))
+  const auditor = await judge.decide(
+    action,
+    authenticatedAs(alice),
+    Judge.Deadline.unbounded(),
+  )
+  const viewer = await judge.decide(
+    action,
+    authenticatedAs(unverified),
+    Judge.Deadline.unbounded(),
+  )
   const anonymous = await judge.decide(
     action,
     authenticatedAs(Access.Identity.anonymous()),
+    Judge.Deadline.unbounded(),
   )
 
   assertEquals(auditor.allowed, true)
@@ -245,18 +270,22 @@ Deno.test('Judge + OPA.PolicyEngine + auth + HttpLookup: a relationship is looke
     const manager = await judge.decide(
       action,
       authenticatedAs(alice, { placeId: 'p-1' }),
+      Judge.Deadline.unbounded(),
     )
     const otherPlace = await judge.decide(
       action,
       authenticatedAs(alice, { placeId: 'p-2' }),
+      Judge.Deadline.unbounded(),
     )
     const notManager = await judge.decide(
       action,
       authenticatedAs(unverified, { placeId: 'p-1' }),
+      Judge.Deadline.unbounded(),
     )
     const anonymous = await judge.decide(
       action,
       authenticatedAs(Access.Identity.anonymous(), { placeId: 'p-1' }),
+      Judge.Deadline.unbounded(),
     )
 
     assertEquals(manager.allowed, true)
@@ -278,10 +307,12 @@ Deno.test('Judge + OPA.PolicyEngine + auth: when the identity cannot be checked,
   const onPublic = await publicAction.judge.decide(
     publicAction.action,
     authenticatedAs(outage),
+    Judge.Deadline.unbounded(),
   )
   const onProtected = await protectedAction.judge.decide(
     protectedAction.action,
     authenticatedAs(outage),
+    Judge.Deadline.unbounded(),
   )
 
   assertEquals(onPublic.allowed, true)
