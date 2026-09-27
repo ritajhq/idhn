@@ -6,7 +6,10 @@ import type { Authenticator } from './authenticator.ts'
 import { Rejection } from './rejection.ts'
 import type { RequestRecord } from './request-record.ts'
 import { RequestRecording } from './request-recording.ts'
-import type { ServiceProvider } from './service-provider.ts'
+import {
+  type ServiceProvider,
+  ServiceUnreachableError,
+} from './service-provider.ts'
 
 /**
  * Orchestrates one request: resolves what action is being attempted, finds
@@ -20,7 +23,9 @@ import type { ServiceProvider } from './service-provider.ts'
  *
  * A judge that is temporarily unavailable is a rejection, not a failure: the
  * request is denied (fail closed) as unavailable, so its caller knows to try
- * again. Any other failure propagates.
+ * again. So is a protected service that can't be reached to forward an
+ * allowed request to: it is answered as unreachable. Any other failure
+ * propagates.
  *
  * How the request was handled, including a failure, is announced on
  * `OnHandled` before `execute` settles.
@@ -71,14 +76,26 @@ export class Guard {
     recording.judged(decision)
 
     if (decision.allowed) {
-      await this.serviceProvider.forward()
-      return recording.forwarded()
+      return await this.forward(recording)
     }
 
     return await this.reject(
       this.authenticator.rejectionFor(identity),
       recording,
     )
+  }
+
+  private async forward(recording: RequestRecording): Promise<void> {
+    try {
+      await this.serviceProvider.forward()
+      recording.forwarded()
+    } catch (error) {
+      if (!(error instanceof ServiceUnreachableError)) {
+        throw error
+      }
+      recording.unreachable(error)
+      await this.reject(Rejection.Unreachable, recording)
+    }
   }
 
   private async reject(

@@ -44,6 +44,11 @@ export class RequestRecording {
     this.rejection = rejection
   }
 
+  /** The protected service could not be reached: the request is about to be answered as unreachable. */
+  unreachable(error: Error): void {
+    this.error = error.message
+  }
+
   failed(error: unknown): void {
     this.outcome = 'failed'
     this.error = error instanceof Error ? error.message : String(error)

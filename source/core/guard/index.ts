@@ -1,6 +1,9 @@
 export type { ActionResolver, ResolvedAction } from './action-resolver.ts'
 export type { Authenticator } from './authenticator.ts'
-export type { ServiceProvider } from './service-provider.ts'
+export {
+  type ServiceProvider,
+  ServiceUnreachableError,
+} from './service-provider.ts'
 export { Rejection, REJECTION_FOR_IDENTITY } from './rejection.ts'
 export { Guard } from './guard.ts'
 export {

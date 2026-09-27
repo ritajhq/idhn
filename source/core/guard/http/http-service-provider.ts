@@ -1,5 +1,8 @@
 import { Rejection } from '../rejection.ts'
-import type { ServiceProvider } from '../service-provider.ts'
+import {
+  type ServiceProvider,
+  ServiceUnreachableError,
+} from '../service-provider.ts'
 import type { RejectResponse } from './reject-responses/reject-response.ts'
 
 /** How each reason for rejecting a request is said in HTTP. */
@@ -7,6 +10,7 @@ const REJECTION_STATUS: Readonly<Record<Rejection, number>> = {
   [Rejection.Forbidden]: 403,
   [Rejection.Unauthenticated]: 401,
   [Rejection.Unavailable]: 503,
+  [Rejection.Unreachable]: 502,
 }
 
 /** How long a caller is told to wait before trying again after a `503`. */
@@ -17,6 +21,7 @@ const REJECTION_HEADERS: Readonly<Record<Rejection, HeadersInit>> = {
   [Rejection.Forbidden]: {},
   [Rejection.Unauthenticated]: {},
   [Rejection.Unavailable]: { 'retry-after': String(RETRY_AFTER_SECONDS) },
+  [Rejection.Unreachable]: {},
 }
 
 /**
@@ -25,7 +30,7 @@ const REJECTION_HEADERS: Readonly<Record<Rejection, HeadersInit>> = {
  * (a bare empty body when a service configured no custom page) under the
  * status for the rejection: `403` forbidden, `401` unauthenticated, `503`
  * with `Retry-After` when the caller's identity or the judgement could not be
- * had for now. Neither method returns
+ * had for now, `502` when the protected service could not be reached. Neither method returns
  * anything (per `ServiceProvider`'s contract) — instead, this class is
  * constructed with a `resolve` function (from `Promise.withResolvers()`)
  * that it calls with the eventual `Response`. This lets the HTTP handler
@@ -52,6 +57,11 @@ export class HttpServiceProvider implements ServiceProvider {
       headers: this.request.headers,
       body: this.request.body,
       redirect: 'manual',
+    }).catch((error: unknown) => {
+      throw new ServiceUnreachableError(
+        `Service at ${this.upstream.origin} could not be reached`,
+        { cause: error },
+      )
     })
     this.resolve(response)
   }

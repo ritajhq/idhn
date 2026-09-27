@@ -1,6 +1,7 @@
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertRejects } from '@std/assert'
 import { HttpServiceProvider } from './http-service-provider.ts'
 import { Rejection } from '../rejection.ts'
+import { ServiceUnreachableError } from '../service-provider.ts'
 import { Bare, Served } from './reject-responses/index.ts'
 
 async function withUpstream(
@@ -197,4 +198,48 @@ Deno.test("HttpServiceProvider.reject: keeps a served page's content-type next t
   assertEquals(response.status, 503)
   assertEquals(response.headers.get('retry-after'), '5')
   assertEquals(response.headers.get('content-type'), 'text/html')
+})
+
+Deno.test('HttpServiceProvider.forward: throws ServiceUnreachableError when the upstream cannot be reached', async () => {
+  const { resolve } = Promise.withResolvers<Response>()
+  const provider = new HttpServiceProvider(
+    new Request('https://gateway.test/a', { method: 'GET' }),
+    new URL('http://localhost:1/'),
+    resolve,
+    new Bare(),
+  )
+
+  await assertRejects(
+    () => provider.forward(),
+    ServiceUnreachableError,
+    'could not be reached',
+  )
+})
+
+Deno.test("HttpServiceProvider.forward: relays an upstream error response as the service's own answer", async () => {
+  await withUpstream(
+    () => new Response('broken', { status: 500 }),
+    async (upstream) => {
+      const { promise, resolve } = Promise.withResolvers<Response>()
+      const provider = new HttpServiceProvider(
+        new Request('https://gateway.test/a', { method: 'GET' }),
+        upstream,
+        resolve,
+        new Bare(),
+      )
+
+      await provider.forward()
+      const response = await promise
+
+      assertEquals(response.status, 500)
+      assertEquals(await response.text(), 'broken')
+    },
+  )
+})
+
+Deno.test('HttpServiceProvider.reject: answers an unreachable service 502, without Retry-After', async () => {
+  const response = await rejected(Rejection.Unreachable)
+
+  assertEquals(response.status, 502)
+  assertEquals(response.headers.get('retry-after'), null)
 })

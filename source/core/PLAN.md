@@ -691,8 +691,12 @@ the status only tells the caller whether retrying makes sense.
   answers `500`, so nothing reaches Deno's default handler and its free-form
   output.
 
-Still open: the upstream service being unreachable during `forward()` is a `500`
-fault today, where a reverse proxy would usually answer `502`.
+- **Service unreachable → `502`.** `HttpServiceProvider.forward()` throws
+  `ServiceUnreachableError` when nothing answers at the upstream (an upstream
+  error response is still relayed as the service's own answer). `Guard` answers
+  the allowed request with `Rejection.Unreachable` and records it with the
+  decision id. There is no forward timeout, since slow upstream responses can be
+  legitimate.
 
 ### Phase 8 — observability & audit (done)
 

@@ -233,6 +233,12 @@ again may help:
   and the guard records a `rejected` request with `rejection: unavailable` and
   the failed judgement's `decisionId`. The same `503` is used when the identity
   provider can't be reached.
+- **`502`** when the request was allowed but the protected service itself can't
+  be reached. The guard records a `rejected` request with
+  `rejection: unreachable` and the `decisionId` that allowed it. An error
+  response from the service is not this case: it is relayed as the service's own
+  answer. A denied request is answered `401`/`403` without ever reaching the
+  service, so it never reveals whether the service is up.
 - **`500`** for everything else, which is a fault to fix rather than wait out: a
   policy missing from the bundle, a lookup answering `404` or `500` or with a
   malformed body, a missing placeholder fact, a bug.

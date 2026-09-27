@@ -7,7 +7,10 @@ import type { Authenticator } from './authenticator.ts'
 import { Guard } from './guard.ts'
 import { Rejection, REJECTION_FOR_IDENTITY } from './rejection.ts'
 import type { RequestRecord } from './request-record.ts'
-import type { ServiceProvider } from './service-provider.ts'
+import {
+  type ServiceProvider,
+  ServiceUnreachableError,
+} from './service-provider.ts'
 
 class FakeActionResolver implements ActionResolver {
   constructor(private readonly resolved: ResolvedAction | null) {}
@@ -344,4 +347,49 @@ Deno.test('Guard.execute: rejects as unavailable, rather than failing, when the 
   assertEquals(records[0].rejection, Rejection.Unavailable)
   assertEquals(records[0].decisionId, 'decision-9')
   assertEquals(records[0].error, 'judge-server is down')
+})
+
+class FailingForwardServiceProvider extends RecordingServiceProvider {
+  constructor(private readonly error: Error) {
+    super()
+  }
+
+  override forward(): Promise<void> {
+    return Promise.reject(this.error)
+  }
+}
+
+Deno.test('Guard.execute: answers an allowed request as unreachable when the service cannot be reached', async () => {
+  const serviceProvider = new FailingForwardServiceProvider(
+    new ServiceUnreachableError('service is down'),
+  )
+  const guard = new Guard(
+    new IdentifiedJudge(true),
+    new FakeActionResolver(resolvedAction),
+    new FakeAuthenticator(alice),
+    serviceProvider,
+  )
+  const records = recordsOf(guard)
+
+  await guard.execute()
+
+  assertEquals(serviceProvider.calls, [Rejection.Unreachable])
+  assertEquals(records[0].outcome, 'rejected')
+  assertEquals(records[0].rejection, Rejection.Unreachable)
+  assertEquals(records[0].decisionId, 'decision-1')
+  assertEquals(records[0].error, 'service is down')
+})
+
+Deno.test('Guard.execute: still fails on any other forwarding error', async () => {
+  const guard = new Guard(
+    new IdentifiedJudge(true),
+    new FakeActionResolver(resolvedAction),
+    new FakeAuthenticator(alice),
+    new FailingForwardServiceProvider(new Error('bug')),
+  )
+  const records = recordsOf(guard)
+
+  await assertRejects(() => guard.execute(), Error, 'bug')
+
+  assertEquals(records[0].outcome, 'failed')
 })
