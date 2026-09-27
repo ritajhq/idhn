@@ -3,7 +3,7 @@ import type * as Environment from '@idhn/environment'
 export interface Config {
   manifestPath: string
   bundlePath: string
-  kvPath: string | undefined
+  policyRegistryPath: string
   policyDataPath: string | undefined
   enrichmentPath: string | undefined
   judgeTimeoutMs: number
@@ -23,7 +23,9 @@ export class ConfigLoader {
     return {
       manifestPath: this.environment.requireString('SERVICE_MANIFEST_PATH'),
       bundlePath: this.environment.requireString('POLICY_BUNDLE_PATH'),
-      kvPath: this.environment.optionalString('KV_PATH'),
+      policyRegistryPath: this.environment.requireString(
+        'POLICY_REGISTRY_PATH',
+      ),
       policyDataPath: this.environment.optionalString('POLICY_DATA_PATH'),
       enrichmentPath: this.environment.optionalString('ENRICHMENT_PATH'),
       judgeTimeoutMs: this.environment.positiveNumber(

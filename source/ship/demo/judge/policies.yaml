@@ -1,0 +1,5 @@
+# Which policies govern which actions: the judge's policy registry for the
+# demo. An action no policy governs is always denied.
+associations:
+  demo.home.visit:
+    - demo.home.visit

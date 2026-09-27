@@ -39,7 +39,7 @@ ignore ports, so each app keeps its own port. This mirrors production, where
    instead of `auth.localhost`. Keep this a dev-only config change if the portal
    has a dev env file for it.
 3. **idhn guard**: run the standalone guard in front of the portal service, per
-   `source/apps/guard/demo/README.md`, with a manifest that declares:
+   `ci/demo/README.md`, with a manifest that declares:
 
    ```yaml
    authentication:

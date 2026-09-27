@@ -1,0 +1,62 @@
+services:
+  guard:
+    image: 'demo/guard:latest'
+    ports:
+      - '8080'
+    environment:
+      PROXY_PORT: '8080'
+      SERVICE_MANIFEST_PATH: /config/manifest.yaml
+      REJECT_RESPONSE_URL: 'file:///config/forbidden.html'
+      JUDGE_SERVER_URL: 'http://judge:8081'
+      UPSTREAM_URL: 'http://service:9100'
+    develop:
+      watch:
+        - path: guard/standalone
+          target: /app
+          action: sync+restart
+  judge:
+    image: 'demo/judge:latest'
+    ports:
+      - '8081'
+    environment:
+      JUDGE_PORT: '8081'
+      POLICY_BUNDLE_PATH: /config/policy.wasm
+      POLICY_REGISTRY_PATH: /config/policies.yaml
+    develop:
+      watch:
+        - path: judge/server
+          target: /app
+          action: sync+restart
+  service:
+    image: 'demo/service:latest'
+    ports:
+      - '9100'
+    environment:
+      PORT: '9100'
+    develop:
+      watch:
+        - path: guard/fake-service
+          target: /app
+          action: sync+restart
+  gateway:
+    image: 'caddy:2.11-alpine'
+    ports:
+      - '80:80'
+    networks:
+      - edge
+      - default
+    configs:
+      - source: gateway-caddyfile
+        target: /etc/caddy/Caddyfile
+    volumes:
+      - 'gateway-data:/data'
+    depends_on:
+      - guard
+volumes:
+  gateway-data: {}
+networks:
+  edge:
+    external: true
+configs:
+  gateway-caddyfile:
+    content: "http://demo.localhost {\n\thandle /* {\n\t\treverse_proxy http://guard:8080\n\t}\n}\n"

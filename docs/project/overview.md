@@ -16,14 +16,13 @@ rationale.
 
 ## Apps at a glance
 
-| App                  | Package                    | Kind         | What it does                                                                |
-| -------------------- | -------------------------- | ------------ | --------------------------------------------------------------------------- |
-| `guard/standalone`   | `@idhn/guard-standalone`   | HTTP server  | Reverse proxy that asks a remote judge-server for each decision             |
-| `guard/embedded`     | `@idhn/guard-embedded`     | HTTP server  | Reverse proxy that runs its Judge in-process, with no separate judge        |
-| `guard/fake-service` | `@idhn/guard-fake-service` | HTTP server  | Stand-in protected service that echoes what it received (demo only)         |
-| `guard/demo`         | —                          | Demo assets  | Manifest, Rego policy, WASM bundle and 403 page for a manual end-to-end run |
-| `judge/server`       | `@idhn/judge-server`       | HTTP server  | Serves a `Judge.Behavior` over HTTP; internal only, never exposed publicly  |
-| `web`                | —                          | Web frontend | React + React Router UI scaffold (early stage)                              |
+| App                  | Package                    | Kind         | What it does                                                               |
+| -------------------- | -------------------------- | ------------ | -------------------------------------------------------------------------- |
+| `guard/standalone`   | `@idhn/guard-standalone`   | HTTP server  | Reverse proxy that asks a remote judge-server for each decision            |
+| `guard/embedded`     | `@idhn/guard-embedded`     | HTTP server  | Reverse proxy that runs its Judge in-process, with no separate judge       |
+| `guard/fake-service` | `@idhn/guard-fake-service` | HTTP server  | Stand-in protected service that echoes what it received (demo only)        |
+| `judge/server`       | `@idhn/judge-server`       | HTTP server  | Serves a `Judge.Behavior` over HTTP; internal only, never exposed publicly |
+| `web`                | —                          | Web frontend | React + React Router UI scaffold (early stage)                             |
 
 ## Deployment topologies
 
@@ -35,9 +34,7 @@ The Guard can reach a Judge in two ways. `Guard` depends only on the
    holds the policy bundle and owns the policy registry.
 2. **Single process (embedded):** `guard/embedded` composes its own Judge inside
    its own process. There is one process and one port, with no
-   `JUDGE_SERVER_URL`. The `guard/base` Docker image ships this build: it starts
-   the Guard in the background, and the consuming image then runs its own
-   service in the foreground.
+   `JUDGE_SERVER_URL`.
 
 ```
 standalone:  client ─▶ guard/standalone ─▶ upstream service
@@ -304,81 +301,80 @@ request is forwarded to `UPSTREAM_URL` or rejected.
 | `REJECT_RESPONSE_URL`   | no       | —       | URL (`file://`, `https://`, …) of a custom rejection body    |
 | `PROXY_PORT`            | no       | `8080`  | Public listening port                                        |
 
-Run it with `deno task start`. It is shipped as
-`source/ship/guard/standalone/Dockerfile`.
+Run it with `deno task start`. The demo ships it as `source/ship/demo/guard/`
+(see [Demo](#demo)).
 
 ### `guard/embedded`
 
 Does the same job as `guard/standalone`, but composes its own Judge in-process
-([main.ts](../../source/apps/guard/embedded/main.ts): OPA engine, KV registry,
+([main.ts](../../source/apps/guard/embedded/main.ts): OPA engine, file registry,
 enrichers, `Judge.Local`) instead of calling a judge-server over HTTP. It
 authenticates the same way, with the same supported schemes. That wiring is
 deliberately its own: it is not shared with `judge/server`, so each app decides
-for itself which engine, registry and enrichers to use. Because the policy
-registry's Deno KV store lives in this process, it needs `--unstable-kv` and
-write permission.
+for itself which engine, registry and enrichers to use. It needs write
+permission, since the file registry writes associations back to its file.
 
-| Env var                 | Required | Default         | Meaning                                     |
-| ----------------------- | -------- | --------------- | ------------------------------------------- |
-| `SERVICE_MANIFEST_PATH` | yes      | —               | Manifest used to resolve action and context |
-| `POLICY_BUNDLE_PATH`    | yes      | —               | OPA WASM policy bundle                      |
-| `KV_PATH`               | no       | Deno KV default | Location of the policy registry's KV store  |
-| `POLICY_DATA_PATH`      | no       | —               | JSON file loaded as Rego's `data`           |
-| `ENRICHMENT_PATH`       | no       | —               | YAML file of enrichment lookups             |
-| `JUDGE_TIMEOUT_MS`      | no       | `5000`          | How long the guard waits for a judgement    |
-| `UPSTREAM_URL`          | yes      | —               | The protected service's address             |
-| `REJECT_RESPONSE_URL`   | no       | —               | Custom rejection body                       |
-| `PROXY_PORT`            | no       | `8080`          | Public listening port                       |
+| Env var                 | Required | Default | Meaning                                     |
+| ----------------------- | -------- | ------- | ------------------------------------------- |
+| `SERVICE_MANIFEST_PATH` | yes      | —       | Manifest used to resolve action and context |
+| `POLICY_BUNDLE_PATH`    | yes      | —       | OPA WASM policy bundle                      |
+| `POLICY_REGISTRY_PATH`  | yes      | —       | YAML file of action → policy associations   |
+| `POLICY_DATA_PATH`      | no       | —       | JSON file loaded as Rego's `data`           |
+| `ENRICHMENT_PATH`       | no       | —       | YAML file of enrichment lookups             |
+| `JUDGE_TIMEOUT_MS`      | no       | `5000`  | How long the guard waits for a judgement    |
+| `UPSTREAM_URL`          | yes      | —       | The protected service's address             |
+| `REJECT_RESPONSE_URL`   | no       | —       | Custom rejection body                       |
+| `PROXY_PORT`            | no       | `8080`  | Public listening port                       |
 
-Its build is shipped in the `guard/base` image (`source/ship/guard/base/`).
-Services extend that image (`FROM guard/base`) and call
-`/opt/guard/start-guard.sh` from their own `CMD`.
+It has no image yet.
 
 ### `judge/server`
 
 The Judge as its own non-public process. At startup
 ([main.ts](../../source/apps/judge/server/main.ts)) it loads the OPA WASM bundle
-into an `OPA.PolicyEngine` and opens a `Policy.Registries.Kv` on Deno KV. It
+into an `OPA.PolicyEngine` and loads a `Policy.Registries.File` from YAML. It
 combines them in a `Judge.Local` that uses a `DenyOverridesStrategy`, which
 defaults to deny. It then exposes that Judge over HTTP with `Judge.Http.Server`.
 It only reads the registry and never writes to it.
 
-| Env var              | Required | Default         | Meaning                                                          |
-| -------------------- | -------- | --------------- | ---------------------------------------------------------------- |
-| `POLICY_BUNDLE_PATH` | yes      | —               | OPA WASM policy bundle                                           |
-| `KV_PATH`            | no       | Deno KV default | Location of the policy registry's KV store                       |
-| `POLICY_DATA_PATH`   | no       | —               | JSON file loaded as Rego's `data`                                |
-| `ENRICHMENT_PATH`    | no       | —               | YAML file of enrichment lookups                                  |
-| `MAX_DECISION_MS`    | no       | `5000`          | Longest a judgement may take for a caller that sends no deadline |
-| `JUDGE_PORT`         | no       | `8081`          | Listening port                                                   |
+| Env var                | Required | Default | Meaning                                                          |
+| ---------------------- | -------- | ------- | ---------------------------------------------------------------- |
+| `POLICY_BUNDLE_PATH`   | yes      | —       | OPA WASM policy bundle                                           |
+| `POLICY_REGISTRY_PATH` | yes      | —       | YAML file of action → policy associations                        |
+| `POLICY_DATA_PATH`     | no       | —       | JSON file loaded as Rego's `data`                                |
+| `ENRICHMENT_PATH`      | no       | —       | YAML file of enrichment lookups                                  |
+| `MAX_DECISION_MS`      | no       | `5000`  | Longest a judgement may take for a caller that sends no deadline |
+| `JUDGE_PORT`           | no       | `8081`  | Listening port                                                   |
 
-Run it with `deno task start`. It is shipped as
-`source/ship/judge/server/Dockerfile`.
+Run it with `deno task start`. The demo ships it as `source/ship/demo/judge/`.
 
 ### `guard/fake-service`
 
 A small stand-in for a protected service, used only for manual testing. It
 replies with an HTML page that shows the method, path, query, headers and body
 it received, so you can tell that a request made it through the Guard. It
-listens on `PORT` (default `9100`), and is shipped as
-`source/ship/guard/fake-service/Dockerfile`.
+listens on `PORT` (default `9100`). The demo ships it as
+`source/ship/demo/service/`.
 
-### `guard/demo`
+### Demo
 
-Assets for a manual end-to-end run, with no code of its own:
+The `demo` workload ([ci/demo/delivery.yml](../../ci/demo/delivery.yml)) runs
+the fake-service, the judge-server and the standalone guard behind a gateway on
+`http://demo.localhost`: `ens develop demo` locally, or
+`ens deploy demo compose`. Each image bakes in its demo configuration from its
+ship directory:
 
-- `manifest.yaml`: service `demo` with a single action, `home.visit` (`GET /`),
-  which extracts the optional `vip` query parameter into the context.
-- `policy.rego`: `demo.home.visit` allows the request only when `vip == "true"`.
-- `policy.wasm`: the compiled bundle. Regenerate it with `./build.sh`, which
-  requires the `opa` CLI.
-- `forbidden.html`: the custom 403 page, used through `REJECT_RESPONSE_URL`.
+- `source/ship/demo/guard/manifest.yaml`: service `demo` with a single action,
+  `home.visit` (`GET /`), which extracts the optional `vip` query parameter into
+  the context. `forbidden.html` is the custom 403 page.
+- `source/ship/demo/judge/policy.rego`: `demo.home.visit` allows the request
+  only when `vip == "true"`. `policy.wasm` is the compiled bundle; regenerate it
+  with `./build.sh`, which requires the `opa` CLI. `policies.yaml` is the policy
+  registry, associating the action with that policy.
 
-Its [README](../../source/apps/guard/demo/README.md) explains how to run the
-fake-service, judge-server and standalone guard by hand, and how to seed the
-`demo.home.visit` association in KV. To bring up the whole stack with Terraform,
-run `ens workflow demo --job up` (see `workflows/demo/`). Once running, `/` is
-rejected and `/?vip=true` is proxied through.
+Once running, `/` is rejected and `/?vip=true` is proxied through. The
+[README](../../ci/demo/README.md) also explains how to run the three apps by
+hand.
 
 ### `web`
 
@@ -404,6 +400,5 @@ none of its features are defined.
 - `config.ts` validates every environment variable up front and throws a
   `ConfigError` for a missing or invalid value. It reads through an `EnvReader`
   (defaulting to `Deno.env`).
-- Packaging lives in `source/ship/`, in a directory that mirrors the app path.
-  The Dockerfiles copy prebuilt `main.js` artifacts rather than building from
-  source.
+- Packaging lives in `source/ship/`. The Dockerfiles copy prebuilt `main.js`
+  artifacts rather than building from source.

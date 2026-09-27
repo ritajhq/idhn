@@ -1,0 +1,84 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ritajhq/ensemble/refs/heads/main/docs/delivery.schema.json
+version: v1
+
+# Each image bakes in its demo configuration (policy bundle, policy registry,
+# service manifest, 403 page) from its ship directory: the compose kit mounts
+# named volumes only, never files from the repository.
+release:
+  demo/judge:
+    kit: docker
+    mode: image
+  demo/guard:
+    kit: docker
+    mode: image
+  demo/service:
+    kit: docker
+    mode: image
+
+deploy:
+  # The one piece the stack does not own: the ingress network the gateway
+  # joins. `ens develop` creates it; a real deploy expects it to exist.
+  external:
+    edge:
+      type: network
+      name: edge
+
+  compute:
+    # The protected service. Only the guard reaches it.
+    service:
+      type: container-orchestrated
+      image: ${release.demo/service}
+      replicas: 1
+      ports:
+        http: 9100
+      env:
+        PORT: "9100"
+      development:
+        sync+restart:
+          - app: guard/fake-service
+            path: /app
+
+    # Internal only: the gateway never routes to it, only the guard asks it.
+    judge:
+      type: container-orchestrated
+      image: ${release.demo/judge}
+      replicas: 1
+      ports:
+        http: 8081
+      env:
+        JUDGE_PORT: "8081"
+        POLICY_BUNDLE_PATH: /config/policy.wasm
+        POLICY_REGISTRY_PATH: /config/policies.yaml
+      development:
+        sync+restart:
+          - app: judge/server
+            path: /app
+
+    guard:
+      type: container-orchestrated
+      image: ${release.demo/guard}
+      replicas: 1
+      ports:
+        http: 8080
+      env:
+        PROXY_PORT: "8080"
+        SERVICE_MANIFEST_PATH: /config/manifest.yaml
+        REJECT_RESPONSE_URL: file:///config/forbidden.html
+        # URLs spelled out: a ${compute.*} reference bakes to a bare port.
+        JUDGE_SERVER_URL: http://judge:8081
+        UPSTREAM_URL: http://service:9100
+      development:
+        sync+restart:
+          - app: guard/standalone
+            path: /app
+
+  networking:
+    gateway:
+      type: gateway
+      network: ${external.edge.name}
+      routes:
+        - host: demo.localhost
+          path: /*
+          target:
+            service: guard
+            port: ${compute.guard.http}

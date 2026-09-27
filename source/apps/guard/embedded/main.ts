@@ -18,7 +18,9 @@ const engine = await OPA.PolicyEngine.load(
   await Deno.readFile(config.bundlePath),
   await new OPA.DataSource(config.policyDataPath).load(),
 )
-const registry = new Policy.Registries.Kv(await Deno.openKv(config.kvPath))
+const registry = await Policy.Registries.File.load(
+  config.policyRegistryPath,
+)
 const enricher = await new Judge.Enrichers.Source(config.enrichmentPath).load()
 
 const judge = new Judge.Local(

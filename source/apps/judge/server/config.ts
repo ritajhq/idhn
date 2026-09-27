@@ -3,7 +3,7 @@ import type * as Environment from '@idhn/environment'
 export interface Config {
   bundlePath: string
   port: number
-  kvPath: string | undefined
+  policyRegistryPath: string
   policyDataPath: string | undefined
   enrichmentPath: string | undefined
   maxDecisionMs: number
@@ -21,7 +21,9 @@ export class ConfigLoader {
     return {
       bundlePath: this.environment.requireString('POLICY_BUNDLE_PATH'),
       port: this.environment.port('JUDGE_PORT', DEFAULT_PORT),
-      kvPath: this.environment.optionalString('KV_PATH'),
+      policyRegistryPath: this.environment.requireString(
+        'POLICY_REGISTRY_PATH',
+      ),
       policyDataPath: this.environment.optionalString('POLICY_DATA_PATH'),
       enrichmentPath: this.environment.optionalString('ENRICHMENT_PATH'),
       maxDecisionMs: this.environment.positiveNumber(
