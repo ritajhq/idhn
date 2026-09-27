@@ -2,11 +2,11 @@ import * as Access from '@idhn/access'
 import type { Behavior } from '../behavior.ts'
 import type { DecideRequestBody, DecideResponseBody } from './wire.ts'
 
-/** Wraps a `Behavior` as an HTTP request handler exposing it over `POST /decide`. */
-export function buildHandler(
-  behavior: Behavior,
-): (request: Request) => Promise<Response> {
-  return async (request: Request): Promise<Response> => {
+/** Exposes a `Behavior` as an HTTP request handler over `POST /decide`. */
+export class Server {
+  constructor(private readonly judge: Behavior) {}
+
+  async handle(request: Request): Promise<Response> {
     if (
       new URL(request.url).pathname !== '/decide' || request.method !== 'POST'
     ) {
@@ -29,7 +29,7 @@ export function buildHandler(
       )
     }
 
-    const decision = await behavior.decide(
+    const decision = await this.judge.decide(
       new Access.Action(body.action),
       new Access.Context(body.context),
     )

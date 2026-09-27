@@ -250,8 +250,8 @@ The Judge as its own non-public process. At startup
 ([main.ts](../../source/apps/judge/server/main.ts)) it loads the OPA WASM bundle
 into an `OPA.PolicyEngine` and opens a `Policy.Registries.Kv` on Deno KV. It
 combines them in a `Judge.Local` that uses a `DenyOverridesStrategy`, which
-defaults to deny. It then exposes that Judge over HTTP with
-`Judge.Http.buildHandler`. It only reads the registry and never writes to it.
+defaults to deny. It then exposes that Judge over HTTP with `Judge.Http.Server`.
+It only reads the registry and never writes to it.
 
 | Env var              | Required | Default         | Meaning                                    |
 | -------------------- | -------- | --------------- | ------------------------------------------ |

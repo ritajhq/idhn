@@ -24,4 +24,6 @@ const deny_strategy = new Judge.DenyOverridesStrategy(new Judge.Decision(false))
 
 const judge = new Judge.Local(registry, engine, deny_strategy, enricher)
 
-Deno.serve({ port: config.port }, Judge.Http.buildHandler(judge))
+const server = new Judge.Http.Server(judge)
+
+Deno.serve({ port: config.port }, (request) => server.handle(request))
