@@ -6,4 +6,6 @@ export interface DecideRequestBody {
 
 export interface DecideResponseBody {
   allowed: boolean
+  /** Identifies the judgement, so the caller's records can be matched against the judge's. */
+  decisionId?: string
 }

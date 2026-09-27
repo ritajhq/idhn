@@ -16,7 +16,7 @@ class FakeJudge implements Behavior {
 }
 
 Deno.test('Server.handle: decides the request and responds with {allowed}', async () => {
-  const judge = new FakeJudge(new Decision(true))
+  const judge = new FakeJudge(new Decision(true, [], 'd-1'))
   const handler = (request: Request) => new Server(judge).handle(request)
 
   const response = await handler(
@@ -30,7 +30,7 @@ Deno.test('Server.handle: decides the request and responds with {allowed}', asyn
   )
 
   assertEquals(response.status, 200)
-  assertEquals(await response.json(), { allowed: true })
+  assertEquals(await response.json(), { allowed: true, decisionId: 'd-1' })
   assertEquals(judge.received.length, 1)
   assertEquals(judge.received[0].action.name, 'demo.home.visit')
   assertEquals(judge.received[0].context.facts, { vip: 'true' })

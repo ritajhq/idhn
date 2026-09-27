@@ -686,17 +686,30 @@ explicitly cover "judge-server is unreachable," since that's now a distinct,
 expected-in-production failure mode (deploys, restarts, network partitions
 between the two processes) rather than a hypothetical.
 
-### Phase 8 — observability & audit
+### Phase 8 — observability & audit (done)
 
-`Decision` already carries the `PolicyResult[]` that produced it, specifically
-for explainability — but nothing yet says where that goes. For an authorization
-system this is usually load-bearing (audit trails, incident investigation,
-debugging a wrongly-denied request), not optional polish. Likely shape: an
-`AuditSink`-style port `Guard` or `Judge` can be given, called with the
-`Decision` after every evaluation. The port itself (speaking in `Decision`)
-would live under `core`; a concrete implementation (structured logs, an event
-stream, etc.) may or may not be domain-specific enough to belong there too —
-exact interface and placement TBD when we get here.
+Built as domain events rather than an injected `AuditSink` port, per the
+project's event-driven convention (`@duesabati/evento`):
+
+- `Judge.Local` announces a `Judge.DecisionRecord` on `OnDecision` for every
+  judgement, including failed ones: decision id, action, the context the
+  policies were evaluated against, outcome, per-policy verdicts, error.
+- `Guard` announces a `RequestRecord` on `OnHandled` for every request,
+  including failed ones: action, identity (status and subject), decision id,
+  outcome, rejection, error. The HTTP apps' `Server` re-announces it as an
+  `HttpRequestRecord` with the method and path.
+- `Decision` gained an `id`, assigned by `Judge.Local` per judgement and
+  returned over HTTP as `decisionId`, so guard and judge log lines correlate
+  across processes. (A request id sent forward by `Judge.Http.Client` was the
+  first idea, but the client is shared across requests and could not know which
+  request it serves without changing `Behavior.decide` or using ambient async
+  state.)
+- `@idhn/log` (`libs/log`) writes entries as JSON Lines to stdout,
+  synchronously; shipping them is left to an external log shipper.
+
+Still open: a failed request also reaches `Deno.serve`'s default error handler,
+which prints an unstructured stack trace next to the structured line (ties into
+Phase 7); no metrics yet.
 
 ### Phase 9 — CI
 
@@ -744,8 +757,9 @@ nothing needs to try several resolvers over one raw input.
   governing policies (and only if there are any) and before evaluating them.
   `Judge.Enrichers` holds `Passthrough`, `Chain`, `HttpLookup` (a cached JSON
   `GET` whose `{name}` URL placeholders are filled from request facts, stored as
-  one named fact) and `Source` (the declarative YAML file, or `Passthrough` when unset). `Access.Context`
-  gained `with()`, which refuses to overwrite an existing fact.
+  one named fact) and `Source` (the declarative YAML file, or `Passthrough` when
+  unset). `Access.Context` gained `with()`, which refuses to overwrite an
+  existing fact.
 
 Each app that needs a `Judge` composes its own in its `main.ts`: `judge/server`
 and `guard/embedded` both read `POLICY_DATA_PATH` and `ENRICHMENT_PATH` and wire

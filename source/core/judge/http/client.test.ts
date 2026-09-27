@@ -29,7 +29,7 @@ Deno.test('Client.decide: posts the action and context, and resolves with the de
         action: 'demo.home.visit',
         context: { vip: 'true' },
       })
-      return Response.json({ allowed: true })
+      return Response.json({ allowed: true, decisionId: 'd-1' })
     },
     async (server) => {
       const client = new Client(server)
@@ -40,6 +40,7 @@ Deno.test('Client.decide: posts the action and context, and resolves with the de
       )
 
       assertEquals(decision.allowed, true)
+      assertEquals(decision.id, 'd-1')
     },
   )
 })

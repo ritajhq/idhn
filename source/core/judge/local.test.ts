@@ -1,7 +1,8 @@
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertNotEquals, assertRejects } from '@std/assert'
 import * as Access from '@idhn/access'
 import * as Policy from '@idhn/policy'
 import { Decision } from './decision.ts'
+import type { DecisionRecord } from './decision-record.ts'
 import type { DecisionStrategy } from './decision-strategy.ts'
 import { DenyOverridesStrategy } from './deny-overrides-strategy.ts'
 import type { Enricher } from './enricher.ts'
@@ -70,7 +71,8 @@ Deno.test('Local.decide: passes an empty result set to the strategy when no poli
   const local = new Local(repository, engine, strategy, new Passthrough())
   const decision = await local.decide(action, context)
 
-  assertEquals(decision, fallback)
+  assertEquals(decision.allowed, fallback.allowed)
+  assertEquals(decision.results, fallback.results)
 })
 
 Deno.test('Local.decide: delegates entirely to the injected strategy, never deciding allow/deny itself', async () => {
@@ -85,7 +87,8 @@ Deno.test('Local.decide: delegates entirely to the injected strategy, never deci
   const local = new Local(repository, engine, strategy, new Passthrough())
   const decision = await local.decide(action, context)
 
-  assertEquals(decision, forcedDeny)
+  assertEquals(decision.allowed, forcedDeny.allowed)
+  assertEquals(decision.results, forcedDeny.results)
 })
 
 class RecordingEnricher implements Enricher {
@@ -152,4 +155,104 @@ Deno.test('Local.decide: does not enrich when no policy governs the action', asy
   await local.decide(action, context)
 
   assertEquals(enricher.calls, 0)
+})
+
+class FailingEnricher implements Enricher {
+  enrich(): Promise<Access.Context> {
+    return Promise.reject(new Error('directory unreachable'))
+  }
+}
+
+function recordsOf(local: Local): DecisionRecord[] {
+  const records: DecisionRecord[] = []
+  local.OnDecision.Do((record) => records.push(record))
+  return records
+}
+
+Deno.test('Local.decide: identifies each decision, and records it under the same id with the verdicts and the context the policies saw', async () => {
+  const policy = new Policy.Identifier('policy.a')
+  const local = new Local(
+    new FakePolicyRepository([policy]),
+    new FakePolicyEngine(new Map([[policy.toString(), Policy.Verdict.Allow]])),
+    new DenyOverridesStrategy(new Decision(false)),
+    new RecordingEnricher({ directory: { active: true } }),
+  )
+  const records = recordsOf(local)
+
+  const decision = await local.decide(action, context)
+
+  assertEquals(records.length, 1)
+  const [record] = records
+  assertEquals(record.decisionId, decision.id)
+  assertEquals(record.action, 'invoice.approve')
+  assertEquals(record.outcome, 'allowed')
+  assertEquals(record.results, [
+    { policy: 'policy.a', verdict: Policy.Verdict.Allow },
+  ])
+  assertEquals(record.context, {
+    subject: 'alice',
+    directory: { active: true },
+  })
+  assertEquals(record.error, undefined)
+})
+
+Deno.test('Local.decide: gives every decision its own id, even when the strategy returns the same fallback', async () => {
+  const local = new Local(
+    new FakePolicyRepository([]),
+    new FakePolicyEngine(new Map()),
+    new DenyOverridesStrategy(new Decision(false)),
+    new Passthrough(),
+  )
+  const records = recordsOf(local)
+
+  const first = await local.decide(action, context)
+  const second = await local.decide(action, context)
+
+  assertNotEquals(first.id, second.id)
+  assertEquals(records.map((record) => record.outcome), ['denied', 'denied'])
+  assertEquals(records[0].context, { subject: 'alice' })
+})
+
+Deno.test('Local.decide: records a judgement that fails, then fails the same way', async () => {
+  const local = new Local(
+    new FakePolicyRepository([new Policy.Identifier('policy.a')]),
+    new FakePolicyEngine(new Map()),
+    new DenyOverridesStrategy(new Decision(false)),
+    new FailingEnricher(),
+  )
+  const records = recordsOf(local)
+
+  await assertRejects(
+    () => local.decide(action, context),
+    Error,
+    'directory unreachable',
+  )
+
+  assertEquals(records.length, 1)
+  assertEquals(records[0].outcome, 'failed')
+  assertEquals(records[0].error, 'directory unreachable')
+  assertEquals(records[0].results, [])
+})
+
+Deno.test('Local.decide: records serialize to a flat, self-describing log entry', async () => {
+  const local = new Local(
+    new FakePolicyRepository([]),
+    new FakePolicyEngine(new Map()),
+    new DenyOverridesStrategy(new Decision(false)),
+    new Passthrough(),
+  )
+  const records = recordsOf(local)
+
+  await local.decide(action, context)
+
+  const entry = JSON.parse(JSON.stringify(records[0]))
+  assertEquals(Object.keys(entry).sort(), [
+    'action',
+    'context',
+    'decisionId',
+    'durationMs',
+    'outcome',
+    'results',
+    'timestamp',
+  ])
 })

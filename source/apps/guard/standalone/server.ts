@@ -1,8 +1,10 @@
+import { Delegate, type Emitter } from '@duesabati/evento'
 import {
   type Authenticators,
   Guard,
   type HttpManifest,
   HttpManifestActionResolver,
+  HttpRequestRecord,
   HttpServiceProvider,
   type RejectResponse,
 } from '@idhn/guard'
@@ -14,8 +16,13 @@ import type * as Judge from '@idhn/judge'
  * against the injected `Judge`. Every collaborator is handed in already
  * built — deciding which ones to use (here, a client to the separate,
  * non-public-facing judge-server) is `main.ts`'s job.
+ *
+ * How each request was handled is announced on `OnRequestHandled`, with the
+ * HTTP method and path the `Guard` itself never sees.
  */
 export class Server {
+  private readonly requestHandled = new Delegate<[HttpRequestRecord]>()
+
   constructor(
     private readonly manifest: HttpManifest,
     private readonly judge: Judge.Behavior,
@@ -23,6 +30,10 @@ export class Server {
     private readonly upstreamUrl: URL,
     private readonly rejectResponse: RejectResponse,
   ) {}
+
+  get OnRequestHandled(): Emitter<[HttpRequestRecord]> {
+    return this.requestHandled
+  }
 
   async handle(request: Request): Promise<Response> {
     const { promise, resolve } = Promise.withResolvers<Response>()
@@ -42,6 +53,9 @@ export class Server {
       actionResolver,
       this.authentication.authenticatorFor(request),
       serviceProvider,
+    )
+    guard.OnHandled.Do((record) =>
+      this.requestHandled.Invoke(new HttpRequestRecord(request, record))
     )
 
     await guard.execute()

@@ -1,6 +1,7 @@
 import { Authenticators, loadManifestFile, RejectResponses } from '@idhn/guard'
 import * as Judge from '@idhn/judge'
 import * as Environment from '@idhn/environment'
+import * as Log from '@idhn/log'
 import { ConfigLoader } from './config.ts'
 import { Server } from './server.ts'
 
@@ -24,5 +25,8 @@ const server = new Server(
   config.upstreamUrl,
   rejectResponse,
 )
+
+const log = new Log.JsonLines()
+server.OnRequestHandled.Do((record) => log.write('guard.request', record))
 
 Deno.serve({ port: config.port }, (request) => server.handle(request))

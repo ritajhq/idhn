@@ -34,7 +34,10 @@ export class Server {
       new Access.Context(body.context),
     )
 
-    const responseBody: DecideResponseBody = { allowed: decision.allowed }
+    const responseBody: DecideResponseBody = {
+      allowed: decision.allowed,
+      decisionId: decision.id,
+    }
     return Response.json(responseBody)
   }
 }

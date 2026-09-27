@@ -30,6 +30,6 @@ export class Client implements Behavior {
     }
 
     const responseBody: DecideResponseBody = await response.json()
-    return new Decision(responseBody.allowed)
+    return new Decision(responseBody.allowed, [], responseBody.decisionId)
   }
 }

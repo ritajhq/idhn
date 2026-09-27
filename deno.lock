@@ -1,6 +1,7 @@
 {
   "version": "5",
   "specifiers": {
+    "jsr:@duesabati/evento@1": "1.0.0",
     "jsr:@std/assert@1.0.14": "1.0.14",
     "jsr:@std/collections@^1.1.3": "1.3.0",
     "jsr:@std/internal@^1.0.10": "1.0.14",
@@ -16,6 +17,9 @@
     "npm:react@19.2.8": "19.2.8"
   },
   "jsr": {
+    "@duesabati/evento@1.0.0": {
+      "integrity": "7459da8806cf41e417aa8e249f9d3f1fbcd273fafcf7760020f0868776cad2e3"
+    },
     "@std/assert@1.0.14": {
       "integrity": "68d0d4a43b365abc927f45a9b85c639ea18a9fab96ad92281e493e4ed84abaa4",
       "dependencies": [
@@ -147,11 +151,13 @@
       },
       "source/apps/guard/embedded": {
         "dependencies": [
+          "jsr:@duesabati/evento@1",
           "jsr:@std/assert@1.0.14"
         ]
       },
       "source/apps/guard/standalone": {
         "dependencies": [
+          "jsr:@duesabati/evento@1",
           "jsr:@std/assert@1.0.14"
         ]
       },
@@ -177,6 +183,7 @@
       },
       "source/core/guard": {
         "dependencies": [
+          "jsr:@duesabati/evento@1",
           "jsr:@std/assert@1.0.14",
           "jsr:@std/yaml@1.1.2",
           "npm:path-to-regexp@8.4.2"
@@ -184,6 +191,7 @@
       },
       "source/core/judge": {
         "dependencies": [
+          "jsr:@duesabati/evento@1",
           "jsr:@std/assert@1.0.14",
           "jsr:@std/yaml@1.1.2"
         ]
@@ -200,6 +208,11 @@
         ]
       },
       "source/libs/environment": {
+        "dependencies": [
+          "jsr:@std/assert@1.0.14"
+        ]
+      },
+      "source/libs/log": {
         "dependencies": [
           "jsr:@std/assert@1.0.14"
         ]

@@ -4,7 +4,8 @@
   "imports": {
     "@std/assert": "jsr:@std/assert@1.0.14",
     "@std/yaml": "jsr:@std/yaml@1.1.2",
-    "path-to-regexp": "npm:path-to-regexp@8.4.2"
+    "path-to-regexp": "npm:path-to-regexp@8.4.2",
+    "@duesabati/evento": "jsr:@duesabati/evento@^1.0.0"
   },
   "fmt": {
     "semiColons": false,

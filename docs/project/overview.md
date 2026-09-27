@@ -193,6 +193,41 @@ the `auth` fact above, there are three sources, from most to least static:
 Enrichment runs inside the judge, which is on the internal network, so the
 public-facing Guard never needs credentials for those data sources.
 
+## Observability: decision and request logs
+
+Both processes write structured logs as JSON Lines (one JSON object per line) to
+stdout, tagged with an `event` field. They never send logs anywhere themselves:
+collecting, shipping and storing them is the job of a log shipper (Vector,
+Fluent Bit, the container runtime's log driver). That keeps logging off the
+network and out of the request's latency.
+
+- **`judge.decision`**: one per judgement, written by the judge (`judge/server`,
+  or `guard/embedded` in-process). It has the `decisionId`, the `action`, the
+  full `context` the policies were evaluated against (including enriched facts
+  and `auth`), the `outcome` (`allowed`, `denied` or `failed`), each policy's
+  verdict under `results`, and an `error` when the judgement failed.
+- **`guard.request`**: one per request, written by the guard. It has the HTTP
+  `method` and `path`, the resolved `action`, the caller's `identity` (status
+  and subject), the `decisionId` of the judgement it got, the `outcome`
+  (`forwarded`, `rejected` or `failed`), the `rejection` reason, and an `error`
+  when handling failed. Fields the guard never got to are left out, so a request
+  no action matched has only its method, path and rejection.
+
+Both carry a `timestamp` (when handling started) and `durationMs`.
+
+**Correlating across processes.** The judge gives every judgement its own id and
+returns it with the `Decision` (over HTTP as `decisionId` in the `/decide`
+response). The guard records that id, so a `guard.request` line and the
+`judge.decision` line that explains it share the same `decisionId`, even when
+they are in different processes' logs.
+
+In code, `Judge.Local` announces each `Judge.DecisionRecord` on its `OnDecision`
+emitter and `Guard` each `RequestRecord` on `OnHandled` (`@duesabati/evento`).
+The HTTP guard apps' `Server` re-announces the latter as an `HttpRequestRecord`
+on `OnRequestHandled`. Each `main.ts` subscribes a `Log.JsonLines` writer
+(`@idhn/log`) to them. Writing is synchronous: the line is on stdout before
+`decide` or `execute` settles.
+
 ## Apps in detail
 
 ### `guard/standalone`
