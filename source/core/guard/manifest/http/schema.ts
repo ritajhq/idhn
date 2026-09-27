@@ -61,6 +61,8 @@ export interface SessionCookieAuthentication {
   claims: readonly string[]
   /** How long an answer may be reused for the same cookie. The cost is revocation lag. `0` disables caching. */
   ttlSeconds: number
+  /** How long to wait for the auth server's whole answer before the identity counts as unavailable. */
+  timeoutMs: number
 }
 
 /**

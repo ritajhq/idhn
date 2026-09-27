@@ -134,6 +134,7 @@ authentication:
     emailVerified,
   ] # optional; these are the default
   ttl_seconds: 5 # optional; default 5, 0 disables caching
+  timeout_ms: 2000 # optional; default 2000, then the identity is unavailable
 actions: [...]
 ```
 
@@ -142,10 +143,10 @@ the schemes that deployment supports (`Authenticators.Schemes`, also where a
 future scheme would get its secrets from the environment), and startup fails
 with `UnsupportedSchemeError` if the manifest names another one.
 
-| Scheme           | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `none`           | Everyone is anonymous (`Authenticators.Anonymous`).                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `session-cookie` | A server-side session in a cookie (the portal's BetterAuth). Without the cookie the request is anonymous and costs no lookup. Otherwise only that cookie is forwarded to `session_url`: a session makes `user.id` the subject and the listed user fields the claims, `null` makes it invalid, and an error, an unreachable auth server or an answer that is not a session makes it unavailable (never cached). Answers are cached per cookie hash for `ttl_seconds`, the revocation lag. |
+| Scheme           | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `none`           | Everyone is anonymous (`Authenticators.Anonymous`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `session-cookie` | A server-side session in a cookie (the portal's BetterAuth). Without the cookie the request is anonymous and costs no lookup. Otherwise only that cookie is forwarded to `session_url`: a session makes `user.id` the subject and the listed user fields the claims, `null` makes it invalid, and an error, an unreachable auth server, no answer within `timeout_ms`, or an answer that is not a session makes it unavailable (never cached). Answers are cached per cookie hash for `ttl_seconds`, the revocation lag. |
 
 Identity providers rarely know roles or relationships, so policies should not
 hardcode usernames: use `data` (for example `data.roles[input.auth.subject]`) or
@@ -179,6 +180,7 @@ the `auth` fact above, there are three sources, from most to least static:
        http:
          url: http://directory.internal/agents/{subject} # {name} is filled from a fact; {auth.subject} from a nested one
        ttl_seconds: 60 # optional; default 0 (no caching)
+       timeout_ms: 2000 # optional; default 2000, then the lookup is unavailable
        optional: false # optional; default false
    ```
 
@@ -225,11 +227,12 @@ A request that can't be judged is always denied. The status says whether trying
 again may help:
 
 - **`503` with `Retry-After: 5`** when something the judgement depends on is
-  temporarily out of reach: the judge-server (unreachable, or answering
-  `429`/`502`/`503`/`504`) or an enrichment lookup's service (the same). The
-  judge records the outcome as `unavailable`, and the guard records a `rejected`
-  request with `rejection: unavailable` and the failed judgement's `decisionId`.
-  The same `503` is used when the identity provider can't be reached.
+  temporarily out of reach: the judge-server (unreachable, no answer within
+  `JUDGE_TIMEOUT_MS`, or answering `429`/`502`/`503`/`504`) or an enrichment
+  lookup's service (the same). The judge records the outcome as `unavailable`,
+  and the guard records a `rejected` request with `rejection: unavailable` and
+  the failed judgement's `decisionId`. The same `503` is used when the identity
+  provider can't be reached.
 - **`500`** for everything else, which is a fault to fix rather than wait out: a
   policy missing from the bundle, a lookup answering `404` or `500` or with a
   malformed body, a missing placeholder fact, a bug.
@@ -265,6 +268,7 @@ request is forwarded to `UPSTREAM_URL` or rejected.
 | ----------------------- | -------- | ------- | ------------------------------------------------------------ |
 | `SERVICE_MANIFEST_PATH` | yes      | —       | `protocol: http` manifest used to resolve action and context |
 | `JUDGE_SERVER_URL`      | yes      | —       | Internal URL of `judge/server`                               |
+| `JUDGE_TIMEOUT_MS`      | no       | `2000`  | How long to wait for the judge-server before answering `503` |
 | `UPSTREAM_URL`          | yes      | —       | The protected service's address                              |
 | `REJECT_RESPONSE_URL`   | no       | —       | URL (`file://`, `https://`, …) of a custom rejection body    |
 | `PROXY_PORT`            | no       | `8080`  | Public listening port                                        |

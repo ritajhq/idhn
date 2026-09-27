@@ -67,3 +67,15 @@ Deno.test('Reader.port: falls back when unset, and rejects anything but a valid 
     )
   }
 })
+
+Deno.test('Reader.positiveNumber: falls back when unset, and rejects anything but a positive number', () => {
+  assertEquals(readerOf({}).positiveNumber('T', 2000), 2000)
+  assertEquals(readerOf({ T: '500' }).positiveNumber('T', 2000), 500)
+  for (const value of ['0', '-1', 'soon']) {
+    assertThrows(
+      () => readerOf({ T: value }).positiveNumber('T', 2000),
+      InvalidError,
+      'T must be a positive number',
+    )
+  }
+})

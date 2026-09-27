@@ -35,6 +35,7 @@ function definition(
     as: 'directory',
     url: `${origin}/agents/{subject}`,
     ttlSeconds: 0,
+    timeoutMs: 2000,
     optional: false,
     ...overrides,
   }
@@ -241,5 +242,23 @@ Deno.test('HttpLookup.enrich: throws UnavailableError when the service cannot be
     () => lookup.enrich(action, new Access.Context({ subject: 'alice' })),
     UnavailableError,
     'could not reach',
+  )
+})
+
+Deno.test('HttpLookup.enrich: throws UnavailableError when the service does not answer within the timeout', async () => {
+  await withServer(
+    async () => {
+      await new Promise((resolve) => setTimeout(resolve, 200))
+      return Response.json({ active: true })
+    },
+    async (origin) => {
+      const lookup = new HttpLookup(definition(origin, { timeoutMs: 50 }))
+
+      await assertRejects(
+        () => lookup.enrich(action, new Access.Context({ subject: 'alice' })),
+        UnavailableError,
+        'within 50ms',
+      )
+    },
   )
 })

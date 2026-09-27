@@ -79,3 +79,21 @@ Deno.test('Source.load: yields an enricher that leaves the context untouched whe
     context,
   )
 })
+
+Deno.test('Source.load: rejects a lookup whose timeout_ms is not a positive number', async () => {
+  const path = await Deno.makeTempFile({ suffix: '.yaml' })
+  try {
+    await Deno.writeTextFile(
+      path,
+      'lookups:\n  - as: x\n    http:\n      url: http://x.test/\n    timeout_ms: 0\n',
+    )
+
+    await assertRejects(
+      () => new Source(path).load(),
+      InvalidDefinitionError,
+      'lookups[0].timeout_ms must be a positive number',
+    )
+  } finally {
+    await Deno.remove(path)
+  }
+})

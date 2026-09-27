@@ -43,6 +43,21 @@ export class Reader {
     return port
   }
 
+  /** A positive number (a duration, a size), or `fallback` when unset. */
+  positiveNumber(name: string, fallback: number): number {
+    const value = this.optionalString(name)
+    if (value === undefined) {
+      return fallback
+    }
+    const number = Number(value)
+    if (!Number.isFinite(number) || number <= 0) {
+      throw new InvalidError(
+        `${name} must be a positive number, got "${value}"`,
+      )
+    }
+    return number
+  }
+
   private parseUrl(value: string, name: string): URL {
     try {
       return new URL(value)

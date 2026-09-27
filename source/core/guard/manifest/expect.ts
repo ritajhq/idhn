@@ -72,6 +72,13 @@ export function expectUrl(raw: unknown, path: string): string {
   return value
 }
 
+export function expectPositiveNumber(raw: unknown, path: string): number {
+  if (typeof raw !== 'number' || !Number.isFinite(raw) || raw <= 0) {
+    throw new ManifestParseError(`${path} must be a positive number`)
+  }
+  return raw
+}
+
 export function expectNonNegativeNumber(raw: unknown, path: string): number {
   if (typeof raw !== 'number' || !Number.isFinite(raw) || raw < 0) {
     throw new ManifestParseError(`${path} must be a non-negative number`)

@@ -8,17 +8,24 @@ import type {
   UnavailableResponseBody,
 } from './wire.ts'
 
+/** How long to wait for the judge-server's whole answer by default. */
+const DEFAULT_TIMEOUT_MS = 2000
+
 /** The judge-server failed in a way asking again won't fix. */
 export class RequestError extends Error {}
 
 /**
  * A `Behavior` that delegates to a remote judge-server over HTTP, keeping it
  * out of the process handling public traffic. A judge-server that can't be
- * reached, or answers that it is temporarily unavailable, fails the
- * judgement with `UnavailableError`; any other failure with `RequestError`.
+ * reached, doesn't answer within `timeoutMs`, or answers that it is
+ * temporarily unavailable, fails the judgement with `UnavailableError`; any
+ * other failure with `RequestError`.
  */
 export class Client implements Behavior {
-  constructor(private readonly server: URL) {}
+  constructor(
+    private readonly server: URL,
+    private readonly timeoutMs: number = DEFAULT_TIMEOUT_MS,
+  ) {}
 
   async decide(
     action: Access.Action,
@@ -29,7 +36,25 @@ export class Client implements Behavior {
       context: { ...context.facts },
     }
 
-    const response = await this.post(body)
+    const signal = AbortSignal.timeout(this.timeoutMs)
+    try {
+      return await this.exchange(body, signal)
+    } catch (error) {
+      if (!signal.aborted) {
+        throw error
+      }
+      throw new UnavailableError(
+        `Judge server at ${this.server.origin} did not answer within ${this.timeoutMs}ms`,
+        { cause: error },
+      )
+    }
+  }
+
+  private async exchange(
+    body: DecideRequestBody,
+    signal: AbortSignal,
+  ): Promise<Decision> {
+    const response = await this.post(body, signal)
     if (!response.ok) {
       throw await this.failureFor(response)
     }
@@ -38,12 +63,16 @@ export class Client implements Behavior {
     return new Decision(responseBody.allowed, [], responseBody.decisionId)
   }
 
-  private async post(body: DecideRequestBody): Promise<Response> {
+  private async post(
+    body: DecideRequestBody,
+    signal: AbortSignal,
+  ): Promise<Response> {
     try {
       return await fetch(new URL('/decide', this.server), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body),
+        signal,
       })
     } catch (error) {
       throw new UnavailableError(

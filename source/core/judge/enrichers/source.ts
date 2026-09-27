@@ -5,6 +5,9 @@ import { Chain } from './chain.ts'
 import { HttpLookup, type HttpLookupDefinition } from './http-lookup.ts'
 import { Passthrough } from './passthrough.ts'
 
+/** How long a lookup waits for its service's whole answer when its definition doesn't say. */
+const DEFAULT_TIMEOUT_MS = 2000
+
 export class InvalidDefinitionError extends Error {}
 
 /**
@@ -18,6 +21,7 @@ export class InvalidDefinitionError extends Error {}
  *         http:
  *           url: http://directory.internal/agents/{subject}
  *         ttl_seconds: 60                # optional; default 0 (no cache)
+ *         timeout_ms: 2000               # optional; default 2000, then unavailable
  *         optional: false                # optional; default false (fail closed)
  */
 export class Source {
@@ -58,6 +62,9 @@ export class Source {
           lookup.ttl_seconds,
           `${path}.ttl_seconds`,
         ),
+      timeoutMs: lookup.timeout_ms === undefined
+        ? DEFAULT_TIMEOUT_MS
+        : this.expectPositiveNumber(lookup.timeout_ms, `${path}.timeout_ms`),
       optional: lookup.optional === undefined
         ? false
         : this.expectBoolean(lookup.optional, `${path}.optional`),
@@ -98,6 +105,13 @@ export class Source {
   private expectBoolean(raw: unknown, path: string): boolean {
     if (typeof raw !== 'boolean') {
       throw new InvalidDefinitionError(`${path} must be a boolean`)
+    }
+    return raw
+  }
+
+  private expectPositiveNumber(raw: unknown, path: string): number {
+    if (typeof raw !== 'number' || !Number.isFinite(raw) || raw <= 0) {
+      throw new InvalidDefinitionError(`${path} must be a positive number`)
     }
     return raw
   }

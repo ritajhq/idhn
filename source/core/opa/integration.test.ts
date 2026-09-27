@@ -121,6 +121,7 @@ Deno.test('Judge + OPA.PolicyEngine + HttpLookup: a policy decides on a fact fet
         as: 'agent_directory',
         url: `${origin}/agents/{subject}`,
         ttlSeconds: 0,
+        timeoutMs: 2000,
         optional: false,
       }),
     )
@@ -235,6 +236,7 @@ Deno.test('Judge + OPA.PolicyEngine + auth + HttpLookup: a relationship is looke
         as: 'managed_places',
         url: `${origin}/managers/{auth.subject}/places`,
         ttlSeconds: 0,
+        timeoutMs: 2000,
         // An anonymous identity has no subject: omit the fact, and let the policy deny.
         optional: true,
       }),

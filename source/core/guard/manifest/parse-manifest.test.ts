@@ -286,6 +286,7 @@ Deno.test('parseManifest: parses session-cookie settings, defaulting what is lef
     issuer: 'http://auth.internal',
     claims: ['username', 'email', 'name', 'emailVerified'],
     ttlSeconds: 5,
+    timeoutMs: 2000,
   })
 })
 
@@ -299,6 +300,7 @@ Deno.test('parseManifest: parses fully-specified session-cookie settings', () =>
       issuer: 'portal',
       claims: ['username'],
       ttl_seconds: 0,
+      timeout_ms: 500,
     },
   })
 
@@ -309,6 +311,7 @@ Deno.test('parseManifest: parses fully-specified session-cookie settings', () =>
     issuer: 'portal',
     claims: ['username'],
     ttlSeconds: 0,
+    timeoutMs: 500,
   })
 })
 
@@ -346,5 +349,21 @@ Deno.test('parseManifest: rejects a negative session-cookie ttl_seconds', () => 
       }),
     ManifestParseError,
     'ttl_seconds',
+  )
+})
+
+Deno.test('parseManifest: rejects a session-cookie timeout_ms that is not a positive number', () => {
+  assertThrows(
+    () =>
+      parseManifest({
+        ...validRaw,
+        authentication: {
+          scheme: 'session-cookie',
+          session_url: 'http://auth.internal/api/auth/get-session',
+          timeout_ms: 0,
+        },
+      }),
+    ManifestParseError,
+    'timeout_ms must be a positive number',
   )
 })

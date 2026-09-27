@@ -19,8 +19,9 @@ interface CachedIdentity {
  * subject, and the configured user fields become the claims. Answers are
  * cached per cookie (by its hash, never its value) for `ttlSeconds`, which is
  * how long a revoked session can still be seen as valid. When the auth server
- * cannot be asked, the identity is `unavailable`: never cached, and never an
- * error, so public actions keep working while the policies deny the rest.
+ * cannot be asked, or doesn't answer within `timeoutMs`, the identity is
+ * `unavailable`: never cached, and never an error, so public actions keep
+ * working while the policies deny the rest.
  */
 export class SessionCookie implements Scheme {
   private readonly cache = new Map<string, CachedIdentity>()
@@ -54,12 +55,29 @@ export class SessionCookie implements Scheme {
     }
   }
 
+  /** The auth server's whole answer, within `timeoutMs` or as a failed lookup. */
   private async fetchSession(token: string): Promise<unknown> {
+    const signal = AbortSignal.timeout(this.settings.timeoutMs)
+    try {
+      return await this.exchange(token, signal)
+    } catch (error) {
+      if (!signal.aborted) {
+        throw error
+      }
+      throw new SessionLookupError(
+        `Session lookup at ${this.settings.sessionUrl} got no answer within ${this.settings.timeoutMs}ms`,
+        { cause: error },
+      )
+    }
+  }
+
+  private async exchange(token: string, signal: AbortSignal): Promise<unknown> {
     const response = await fetch(this.settings.sessionUrl, {
       headers: {
         accept: 'application/json',
         cookie: `${this.settings.cookie}=${token}`,
       },
+      signal,
     }).catch((error: unknown) => {
       throw new SessionLookupError(
         `Session lookup at ${this.settings.sessionUrl} failed: ${

@@ -35,6 +35,7 @@ function settings(
     issuer: 'portal',
     claims: ['username', 'email', 'name', 'emailVerified'],
     ttlSeconds: 0,
+    timeoutMs: 2000,
     ...overrides,
   }
 }
@@ -282,5 +283,23 @@ Deno.test('SessionCookie: challenges a denied caller without a valid session, an
       Rejection.Unauthenticated,
       Rejection.Unavailable,
     ],
+  )
+})
+
+Deno.test('SessionCookie: reports the identity as unavailable when the auth server does not answer within the timeout', async () => {
+  await withAuthServer(
+    async () => {
+      await new Promise((resolve) => setTimeout(resolve, 200))
+      return Response.json(aliceSession)
+    },
+    async (sessionUrl) => {
+      const scheme = new SessionCookie(settings(sessionUrl, { timeoutMs: 50 }))
+
+      const identity = await scheme
+        .authenticatorFor(requestWithCookie(`${COOKIE}=token-a`))
+        .authenticate()
+
+      assertEquals(identity.status, 'unavailable')
+    },
   )
 })

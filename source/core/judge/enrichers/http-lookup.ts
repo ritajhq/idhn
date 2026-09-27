@@ -12,6 +12,8 @@ export interface HttpLookupDefinition {
   url: string
   /** How long a response may be reused, per resolved URL. `0` disables caching. */
   ttlSeconds: number
+  /** How long to wait for the service's whole answer before the lookup counts as unavailable. */
+  timeoutMs: number
   /**
    * When `true` a failed lookup (or a missing placeholder fact) just omits the
    * fact. Otherwise a service that is temporarily out of reach throws
@@ -116,13 +118,7 @@ export class HttpLookup implements Enricher {
       return cached.data
     }
 
-    const response = await this.fetchFrom(url)
-    if (!response.ok) {
-      await response.body?.cancel()
-      throw this.failureFor(response, url)
-    }
-
-    const data: unknown = await response.json()
+    const data = await this.fetchData(url)
     if (this.definition.ttlSeconds > 0) {
       this.cache.set(url.href, {
         data,
@@ -132,9 +128,33 @@ export class HttpLookup implements Enricher {
     return data
   }
 
-  private async fetchFrom(url: URL): Promise<Response> {
+  /** The service's answer, within `timeoutMs` or as unavailable. */
+  private async fetchData(url: URL): Promise<unknown> {
+    const signal = AbortSignal.timeout(this.definition.timeoutMs)
     try {
-      return await fetch(url, { headers: { accept: 'application/json' } })
+      const response = await this.fetchFrom(url, signal)
+      if (!response.ok) {
+        await response.body?.cancel()
+        throw this.failureFor(response, url)
+      }
+      return await response.json()
+    } catch (error) {
+      if (!signal.aborted) {
+        throw error
+      }
+      throw new UnavailableError(
+        `Lookup "${this.definition.as}" got no answer from ${url.origin} within ${this.definition.timeoutMs}ms`,
+        { cause: error },
+      )
+    }
+  }
+
+  private async fetchFrom(url: URL, signal: AbortSignal): Promise<Response> {
+    try {
+      return await fetch(url, {
+        headers: { accept: 'application/json' },
+        signal,
+      })
     } catch (error) {
       throw new UnavailableError(
         `Lookup "${this.definition.as}" could not reach ${url.origin}`,

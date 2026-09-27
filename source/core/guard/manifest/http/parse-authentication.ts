@@ -3,6 +3,7 @@ import {
   expectNonNegativeNumber,
   expectObject,
   expectOneOf,
+  expectPositiveNumber,
   expectString,
   expectUrl,
 } from '../expect.ts'
@@ -18,6 +19,7 @@ import type {
 const DEFAULT_SESSION_COOKIE = 'better-auth.session_token'
 const DEFAULT_SESSION_CLAIMS = ['username', 'email', 'name', 'emailVerified']
 const DEFAULT_SESSION_TTL_SECONDS = 5
+const DEFAULT_SESSION_TIMEOUT_MS = 2000
 
 /** One settings parser per scheme: given the raw `authentication` object (its `scheme` already validated), builds that scheme's settings. */
 const SCHEME_PARSERS: {
@@ -75,5 +77,8 @@ function parseSessionCookie(
     ttlSeconds: settings.ttl_seconds === undefined
       ? DEFAULT_SESSION_TTL_SECONDS
       : expectNonNegativeNumber(settings.ttl_seconds, `${path}.ttl_seconds`),
+    timeoutMs: settings.timeout_ms === undefined
+      ? DEFAULT_SESSION_TIMEOUT_MS
+      : expectPositiveNumber(settings.timeout_ms, `${path}.timeout_ms`),
   }
 }

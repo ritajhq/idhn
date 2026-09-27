@@ -678,6 +678,12 @@ the status only tells the caller whether retrying makes sense.
   answers it `503` with that id in the body; `Guard` treats it as a rejection
   (`Rejection.Unavailable`), not a failure, and records the id, so the two log
   lines still correlate.
+- **Timeouts.** Every outbound call on the request path waits at most 2 seconds
+  by default for the whole answer (connect, headers and body), and a call that
+  times out counts as unavailable: the judge client (`JUDGE_TIMEOUT_MS`), each
+  enrichment lookup (`timeout_ms` in the enrichment file) and the session-cookie
+  lookup (`timeout_ms` in the manifest's `authentication`). The upstream
+  `forward()` has none, since slow upstream responses can be legitimate.
 - **Anything else → `500`.** A policy missing from the bundle, a lookup that
   gets `404`/`500` or a malformed answer, a missing placeholder fact, or a bug
   propagates. Each app's `main.ts` gives `Deno.serve` an `onError` that writes
@@ -686,9 +692,7 @@ the status only tells the caller whether retrying makes sense.
   output.
 
 Still open: the upstream service being unreachable during `forward()` is a `500`
-fault today, where a reverse proxy would usually answer `502`; lookups and the
-judge client have no request timeout, so a hung service hangs the judgement
-instead of making it unavailable.
+fault today, where a reverse proxy would usually answer `502`.
 
 ### Phase 8 — observability & audit (done)
 

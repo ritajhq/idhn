@@ -97,3 +97,23 @@ Deno.test('Client.decide: throws UnavailableError when the server cannot be reac
     'could not be reached',
   )
 })
+
+Deno.test('Client.decide: throws UnavailableError when the server does not answer within the timeout', async () => {
+  await withServer(
+    async () => {
+      await new Promise((resolve) => setTimeout(resolve, 200))
+      return Response.json({ allowed: true })
+    },
+    async (server) => {
+      await assertRejects(
+        () =>
+          new Client(server, 50).decide(
+            new Access.Action('demo.home.visit'),
+            new Access.Context(),
+          ),
+        UnavailableError,
+        'within 50ms',
+      )
+    },
+  )
+})
