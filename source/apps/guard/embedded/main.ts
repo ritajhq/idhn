@@ -26,6 +26,7 @@ const judge = new Judge.Local(
   engine,
   new Judge.DenyOverridesStrategy(new Judge.Decision(false)),
   enricher,
+  config.decisionDeadlineMs,
 )
 const authentication = new Authenticators.Schemes({
   none: () => new Authenticators.Anonymous(),

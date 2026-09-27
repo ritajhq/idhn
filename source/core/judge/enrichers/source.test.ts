@@ -2,6 +2,9 @@ import { assertEquals, assertRejects } from '@std/assert'
 import * as Access from '@idhn/access'
 import { InvalidDefinitionError, Source } from './source.ts'
 
+/** A deadline that never passes, for calls that aren't about deadlines. */
+const noDeadline = new AbortController().signal
+
 const fixturePath = new URL('./tests/fixtures/lookups.yaml', import.meta.url)
 
 Deno.test('Source.load: builds an enricher from a real YAML file that leaves a non-applicable action untouched', async () => {
@@ -14,6 +17,7 @@ Deno.test('Source.load: builds an enricher from a real YAML file that leaves a n
   const enriched = await enricher.enrich(
     new Access.Action('billing.something_else'),
     context,
+    noDeadline,
   )
 
   assertEquals(enriched.facts, { subject: 'alice' })
@@ -75,6 +79,7 @@ Deno.test('Source.load: yields an enricher that leaves the context untouched whe
     await enricher.enrich(
       new Access.Action('billing.invoice_approve'),
       context,
+      noDeadline,
     ),
     context,
   )

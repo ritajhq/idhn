@@ -684,6 +684,15 @@ the status only tells the caller whether retrying makes sense.
   enrichment lookup (`timeout_ms` in the enrichment file) and the session-cookie
   lookup (`timeout_ms` in the manifest's `authentication`). The upstream
   `forward()` has none, since slow upstream responses can be legitimate.
+- **Decision deadline.** `Judge.Local` reaches each judgement within
+  `deadlineMs` (`DECISION_DEADLINE_MS`, default 1500) or fails it as
+  unavailable. The deadline is an `AbortSignal` handed to the enrichers
+  (`Enricher.enrich(action, context, deadline)`): `Chain` starts no enricher
+  after it, `HttpLookup` aborts its in-flight request. `Local` also races the
+  judgement against it, so a judgement is answered in time even if an enricher
+  ignores it. Keeping it below the guard's `JUDGE_TIMEOUT_MS` means the guard
+  always receives the judge's `503` and its `decisionId`, however many slow
+  lookups run.
 - **Anything else → `500`.** A policy missing from the bundle, a lookup that
   gets `404`/`500` or a malformed answer, a missing placeholder fact, or a bug
   propagates. Each app's `main.ts` gives `Deno.serve` an `onError` that writes

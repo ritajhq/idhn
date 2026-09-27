@@ -23,7 +23,13 @@ const registry = new Policy.Registries.Kv(await Deno.openKv(config.kvPath))
 const enricher = await new Judge.Enrichers.Source(config.enrichmentPath).load()
 const deny_strategy = new Judge.DenyOverridesStrategy(new Judge.Decision(false))
 
-const judge = new Judge.Local(registry, engine, deny_strategy, enricher)
+const judge = new Judge.Local(
+  registry,
+  engine,
+  deny_strategy,
+  enricher,
+  config.decisionDeadlineMs,
+)
 
 const log = new Log.JsonLines()
 judge.OnDecision.Do((record) => log.write('judge.decision', record))

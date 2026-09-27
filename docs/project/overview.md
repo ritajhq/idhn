@@ -256,6 +256,30 @@ on `OnRequestHandled`. Each `main.ts` subscribes a `Log.JsonLines` writer
 (`@idhn/log`) to them. Writing is synchronous: the line is on stdout before
 `decide` or `execute` settles.
 
+### Timeouts and the decision deadline
+
+Every call a request waits on gives up after a time limit, and giving up counts
+as unavailable (`503`):
+
+| Who waits           | For                   | Limit                                               |
+| ------------------- | --------------------- | --------------------------------------------------- |
+| guard               | judge-server          | `JUDGE_TIMEOUT_MS`, default `2000`                  |
+| guard               | auth server (session) | `timeout_ms` in the manifest, default `2000`        |
+| judge, per decision | the whole judgement   | `DECISION_DEADLINE_MS`, default `1500`              |
+| judge, per lookup   | one lookup's service  | `timeout_ms` in the enrichment file, default `2000` |
+
+The decision deadline is the one that keeps the others consistent. Lookups run
+one after another, so several slow ones can add up to more than any single
+lookup's limit, and more than the guard is willing to wait. The judge therefore
+limits the whole judgement: when the deadline passes it abandons any lookup
+still in flight, starts no new one, and answers `503` with the `decisionId`.
+Because the deadline (1.5s) is shorter than the guard's wait (2s), that answer
+always reaches the guard in time, so the guard's log points at the judge's
+`unavailable` line instead of just saying the judge didn't answer. **Keep
+`DECISION_DEADLINE_MS` below `JUDGE_TIMEOUT_MS`**, leaving room for the network
+hop. A lookup's own `timeout_ms` can be longer than the deadline; it then only
+matters when the deadline is raised.
+
 ## Apps in detail
 
 ### `guard/standalone`
@@ -300,6 +324,7 @@ write permission.
 | `KV_PATH`               | no       | Deno KV default | Location of the policy registry's KV store  |
 | `POLICY_DATA_PATH`      | no       | —               | JSON file loaded as Rego's `data`           |
 | `ENRICHMENT_PATH`       | no       | —               | YAML file of enrichment lookups             |
+| `DECISION_DEADLINE_MS`  | no       | `1500`          | Time limit for reaching each judgement      |
 | `UPSTREAM_URL`          | yes      | —               | The protected service's address             |
 | `REJECT_RESPONSE_URL`   | no       | —               | Custom rejection body                       |
 | `PROXY_PORT`            | no       | `8080`          | Public listening port                       |
@@ -317,13 +342,14 @@ combines them in a `Judge.Local` that uses a `DenyOverridesStrategy`, which
 defaults to deny. It then exposes that Judge over HTTP with `Judge.Http.Server`.
 It only reads the registry and never writes to it.
 
-| Env var              | Required | Default         | Meaning                                    |
-| -------------------- | -------- | --------------- | ------------------------------------------ |
-| `POLICY_BUNDLE_PATH` | yes      | —               | OPA WASM policy bundle                     |
-| `KV_PATH`            | no       | Deno KV default | Location of the policy registry's KV store |
-| `POLICY_DATA_PATH`   | no       | —               | JSON file loaded as Rego's `data`          |
-| `ENRICHMENT_PATH`    | no       | —               | YAML file of enrichment lookups            |
-| `JUDGE_PORT`         | no       | `8081`          | Listening port                             |
+| Env var                | Required | Default         | Meaning                                                                              |
+| ---------------------- | -------- | --------------- | ------------------------------------------------------------------------------------ |
+| `POLICY_BUNDLE_PATH`   | yes      | —               | OPA WASM policy bundle                                                               |
+| `KV_PATH`              | no       | Deno KV default | Location of the policy registry's KV store                                           |
+| `POLICY_DATA_PATH`     | no       | —               | JSON file loaded as Rego's `data`                                                    |
+| `ENRICHMENT_PATH`      | no       | —               | YAML file of enrichment lookups                                                      |
+| `DECISION_DEADLINE_MS` | no       | `1500`          | Time limit for reaching each judgement; keep it below the guards' `JUDGE_TIMEOUT_MS` |
+| `JUDGE_PORT`           | no       | `8081`          | Listening port                                                                       |
 
 Run it with `deno task start`. It is shipped as
 `source/ship/judge/server/Dockerfile`.

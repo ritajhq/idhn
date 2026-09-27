@@ -7,6 +7,7 @@ export class Passthrough implements Enricher {
   async enrich(
     _action: Access.Action,
     context: Access.Context,
+    _deadline: AbortSignal,
   ): Promise<Access.Context> {
     return context
   }

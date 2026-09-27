@@ -50,12 +50,13 @@ export class HttpLookup implements Enricher {
   async enrich(
     action: Access.Action,
     context: Access.Context,
+    deadline: AbortSignal,
   ): Promise<Access.Context> {
     if (!this.appliesTo(action)) {
       return context
     }
 
-    const data = await this.lookup(context)
+    const data = await this.lookup(context, deadline)
     if (data === OMITTED) {
       return context
     }
@@ -67,9 +68,12 @@ export class HttpLookup implements Enricher {
     return actions === undefined || actions.includes(action.name)
   }
 
-  private async lookup(context: Access.Context): Promise<unknown> {
+  private async lookup(
+    context: Access.Context,
+    deadline: AbortSignal,
+  ): Promise<unknown> {
     try {
-      return await this.fetchCached(this.resolveUrl(context))
+      return await this.fetchCached(this.resolveUrl(context), deadline)
     } catch (error) {
       if (this.definition.optional) {
         return OMITTED
@@ -112,13 +116,13 @@ export class HttpLookup implements Enricher {
     }, context.facts)
   }
 
-  private async fetchCached(url: URL): Promise<unknown> {
+  private async fetchCached(url: URL, deadline: AbortSignal): Promise<unknown> {
     const cached = this.cache.get(url.href)
     if (cached !== undefined && cached.expiresAt > this.now()) {
       return cached.data
     }
 
-    const data = await this.fetchData(url)
+    const data = await this.fetchData(url, deadline)
     if (this.definition.ttlSeconds > 0) {
       this.cache.set(url.href, {
         data,
@@ -128,9 +132,10 @@ export class HttpLookup implements Enricher {
     return data
   }
 
-  /** The service's answer, within `timeoutMs` or as unavailable. */
-  private async fetchData(url: URL): Promise<unknown> {
-    const signal = AbortSignal.timeout(this.definition.timeoutMs)
+  /** The service's answer, within `timeoutMs` and the judgement's deadline, or as unavailable. */
+  private async fetchData(url: URL, deadline: AbortSignal): Promise<unknown> {
+    const timeout = AbortSignal.timeout(this.definition.timeoutMs)
+    const signal = AbortSignal.any([deadline, timeout])
     try {
       const response = await this.fetchFrom(url, signal)
       if (!response.ok) {
@@ -143,7 +148,9 @@ export class HttpLookup implements Enricher {
         throw error
       }
       throw new UnavailableError(
-        `Lookup "${this.definition.as}" got no answer from ${url.origin} within ${this.definition.timeoutMs}ms`,
+        deadline.aborted
+          ? `Lookup "${this.definition.as}" was cut short by the judgement's deadline`
+          : `Lookup "${this.definition.as}" got no answer from ${url.origin} within ${this.definition.timeoutMs}ms`,
         { cause: error },
       )
     }

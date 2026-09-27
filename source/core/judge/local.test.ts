@@ -282,3 +282,68 @@ Deno.test('Local.decide: records a temporarily unavailable judgement as such, an
   assertEquals(records[0].outcome, 'unavailable')
   assertEquals(error.decisionId, records[0].decisionId)
 })
+
+/** Waits for the deadline, then gives up the way a cooperating enricher does. */
+class DeadlineAwareEnricher implements Enricher {
+  sawDeadline = false
+
+  enrich(
+    _action: Access.Action,
+    _context: Access.Context,
+    deadline: AbortSignal,
+  ): Promise<Access.Context> {
+    return new Promise((_resolve, reject) => {
+      deadline.addEventListener('abort', () => {
+        this.sawDeadline = true
+        reject(deadline.reason)
+      })
+    })
+  }
+}
+
+/** Never answers and ignores the deadline, like a hung dependency. */
+class HungEnricher implements Enricher {
+  enrich(): Promise<Access.Context> {
+    return new Promise(() => {})
+  }
+}
+
+function localWith(enricher: Enricher, deadlineMs: number): Local {
+  return new Local(
+    new FakePolicyRepository([new Policy.Identifier('policy.a')]),
+    new FakePolicyEngine(new Map()),
+    new DenyOverridesStrategy(new Decision(false)),
+    enricher,
+    deadlineMs,
+  )
+}
+
+Deno.test('Local.decide: fails as unavailable once the deadline passes, telling the enrichers to give up', async () => {
+  const enricher = new DeadlineAwareEnricher()
+  const local = localWith(enricher, 50)
+  const records = recordsOf(local)
+
+  const error = await assertRejects(
+    () => local.decide(action, context),
+    UnavailableError,
+    'not reached within 50ms',
+  )
+
+  assertEquals(enricher.sawDeadline, true)
+  assertEquals(records[0].outcome, 'unavailable')
+  assertEquals(error.decisionId, records[0].decisionId)
+})
+
+Deno.test('Local.decide: answers by the deadline even when an enricher ignores it', async () => {
+  const local = localWith(new HungEnricher(), 50)
+  const started = performance.now()
+
+  await assertRejects(
+    () => local.decide(action, context),
+    UnavailableError,
+    'not reached within 50ms',
+  )
+
+  const elapsed = performance.now() - started
+  assertEquals(elapsed < 500, true, `took ${elapsed}ms`)
+})
