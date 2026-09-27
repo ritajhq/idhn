@@ -58,6 +58,24 @@ export class Reader {
     return number
   }
 
+  /** One of `values`, or `fallback` when unset. */
+  oneOf<T extends string>(
+    name: string,
+    values: readonly T[],
+    fallback: T,
+  ): T {
+    const value = this.optionalString(name)
+    if (value === undefined) {
+      return fallback
+    }
+    if (!(values as readonly string[]).includes(value)) {
+      throw new InvalidError(
+        `${name} must be one of ${values.join(', ')}, got "${value}"`,
+      )
+    }
+    return value as T
+  }
+
   private parseUrl(value: string, name: string): URL {
     try {
       return new URL(value)

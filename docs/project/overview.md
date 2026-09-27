@@ -294,14 +294,36 @@ Authentication happens here, in the public process; the judge-server trusts the
 `auth` fact it is sent, which is one more reason it must stay internal. The
 request is forwarded to `UPSTREAM_URL` or rejected.
 
-| Env var                 | Required | Default | Meaning                                                      |
-| ----------------------- | -------- | ------- | ------------------------------------------------------------ |
-| `SERVICE_MANIFEST_PATH` | yes      | —       | `protocol: http` manifest used to resolve action and context |
-| `JUDGE_SERVER_URL`      | yes      | —       | Internal URL of `judge/server`                               |
-| `JUDGE_TIMEOUT_MS`      | no       | `5000`  | How long to wait for a judgement before answering `503`      |
-| `UPSTREAM_URL`          | yes      | —       | The protected service's address                              |
-| `REJECT_RESPONSE_URL`   | no       | —       | URL (`file://`, `https://`, …) of a custom rejection body    |
-| `PROXY_PORT`            | no       | `8080`  | Public listening port                                        |
+| Env var                 | Required  | Default | Meaning                                                      |
+| ----------------------- | --------- | ------- | ------------------------------------------------------------ |
+| `ENFORCEMENT`           | no        | `full`  | `full`, `authn-only` or `permissive` (see below)             |
+| `SERVICE_MANIFEST_PATH` | yes       | —       | `protocol: http` manifest used to resolve action and context |
+| `JUDGE_SERVER_URL`      | at `full` | —       | Internal URL of `judge/server`                               |
+| `JUDGE_TIMEOUT_MS`      | no        | `5000`  | How long to wait for a judgement before answering `503`      |
+| `UPSTREAM_URL`          | yes       | —       | The protected service's address                              |
+| `REJECT_RESPONSE_URL`   | no        | —       | URL (`file://`, `https://`, …) of a custom rejection body    |
+| `PROXY_PORT`            | no        | `8080`  | Public listening port                                        |
+
+`ENFORCEMENT` sets how much of its job the guard does. Both guards read it:
+
+| Level        | Authenticates | Asks the judge | Lets through                                     |
+| ------------ | ------------- | -------------- | ------------------------------------------------ |
+| `full`       | yes           | yes            | what the policies allow                          |
+| `authn-only` | yes           | no             | any authenticated caller (others get 401 or 503) |
+| `permissive` | no            | no             | everyone                                         |
+
+Anything but `full` is for development only, to put a service behind a guard
+before its policies, or its authentication, exist. `Enforcement` picks the judge
+and the authentication for the level: `authn-only` asks a
+`Judge.AuthenticatedOnly`, which allows a caller the `auth` fact reports as
+authenticated, and `permissive` asks a `Judge.Permissive`, which allows
+everything, with the `none` scheme. At either, the judge's own settings are
+neither needed nor read. The guard still resolves the action from the manifest,
+so a request no action matches is still rejected with `403` at every level, on
+purpose: a route the manifest doesn't map shows up while developing instead of
+slipping through unnoticed. Neither stand-in evaluates a policy, so the
+`guard.request` lines carry no `decisionId`, and the guard logs its level once
+at startup as `guard.started`.
 
 Run it with `deno task start`. It is shipped as
 `source/ship/guard/standalone/Dockerfile`, and the demo ships it with its
@@ -317,17 +339,18 @@ deliberately its own: it is not shared with `judge/server`, so each app decides
 for itself which engine, registry and enrichers to use. It needs write
 permission, since the file registry writes associations back to its file.
 
-| Env var                 | Required | Default | Meaning                                     |
-| ----------------------- | -------- | ------- | ------------------------------------------- |
-| `SERVICE_MANIFEST_PATH` | yes      | —       | Manifest used to resolve action and context |
-| `POLICY_BUNDLE_PATH`    | yes      | —       | OPA WASM policy bundle                      |
-| `POLICY_REGISTRY_PATH`  | yes      | —       | YAML file of action → policy associations   |
-| `POLICY_DATA_PATH`      | no       | —       | JSON file loaded as Rego's `data`           |
-| `ENRICHMENT_PATH`       | no       | —       | YAML file of enrichment lookups             |
-| `JUDGE_TIMEOUT_MS`      | no       | `5000`  | How long the guard waits for a judgement    |
-| `UPSTREAM_URL`          | yes      | —       | The protected service's address             |
-| `REJECT_RESPONSE_URL`   | no       | —       | Custom rejection body                       |
-| `PROXY_PORT`            | no       | `8080`  | Public listening port                       |
+| Env var                 | Required  | Default | Meaning                                                       |
+| ----------------------- | --------- | ------- | ------------------------------------------------------------- |
+| `ENFORCEMENT`           | no        | `full`  | `full`, `authn-only` or `permissive` (see `guard/standalone`) |
+| `SERVICE_MANIFEST_PATH` | yes       | —       | Manifest used to resolve action and context                   |
+| `POLICY_BUNDLE_PATH`    | at `full` | —       | OPA WASM policy bundle                                        |
+| `POLICY_REGISTRY_PATH`  | at `full` | —       | YAML file of action → policy associations                     |
+| `POLICY_DATA_PATH`      | no        | —       | JSON file loaded as Rego's `data`                             |
+| `ENRICHMENT_PATH`       | no        | —       | YAML file of enrichment lookups                               |
+| `JUDGE_TIMEOUT_MS`      | no        | `5000`  | How long the guard waits for a judgement                      |
+| `UPSTREAM_URL`          | yes       | —       | The protected service's address                               |
+| `REJECT_RESPONSE_URL`   | no        | —       | Custom rejection body                                         |
+| `PROXY_PORT`            | no        | `8080`  | Public listening port                                         |
 
 Its build is shipped in the `guard/base` image (`source/ship/guard/base/`).
 Services extend that image (`FROM guard/base`) and call

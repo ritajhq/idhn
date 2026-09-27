@@ -27,9 +27,12 @@ consumer's own `CMD` can `exec` its service in the foreground as the container's
 PID 1. Guard reads its config from the environment:
 
 - `SERVICE_MANIFEST_PATH` — action-resolution manifest (required)
-- `POLICY_BUNDLE_PATH` — the OPA policy bundle (required)
+- `ENFORCEMENT` — `full` (default), or for development `authn-only` (let any
+  authenticated caller through, no policies) or `permissive` (let everyone
+  through); see `docs/project/overview.md`
+- `POLICY_BUNDLE_PATH` — the OPA policy bundle (required at `full`)
 - `POLICY_REGISTRY_PATH` — YAML file associating actions with the policies that
-  govern them (required)
+  govern them (required at `full`)
 - `POLICY_DATA_PATH` — JSON file loaded as Rego's `data` document, for
   slow-changing reference data such as allow-lists (optional)
 - `ENRICHMENT_PATH` — YAML file declaring HTTP lookups run before policies are

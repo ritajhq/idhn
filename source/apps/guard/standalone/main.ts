@@ -1,22 +1,36 @@
-import { Authenticators, loadManifestFile, RejectResponses } from '@idhn/guard'
+import {
+  Authenticators,
+  Enforcement,
+  loadManifestFile,
+  RejectResponses,
+} from '@idhn/guard'
 import * as Judge from '@idhn/judge'
 import * as Environment from '@idhn/environment'
 import * as Log from '@idhn/log'
 import { ConfigLoader } from './config.ts'
 import { Server } from './server.ts'
 
-const config = new ConfigLoader(new Environment.Reader(Deno.env)).load()
+const configLoader = new ConfigLoader(new Environment.Reader(Deno.env))
+const config = configLoader.load()
+const enforcement = new Enforcement(config.enforcement)
 
 const manifest = await loadManifestFile(config.manifestPath, 'http')
-const judge = new Judge.Http.Client(config.judgeServerUrl)
+const judge = await enforcement.judge(() =>
+  new Judge.Http.Client(configLoader.judging().judgeServerUrl)
+)
 const rejectResponse = await new RejectResponses.Source(
   config.rejectResponseUrl,
 ).load()
 
-const authentication = new Authenticators.Schemes({
-  none: () => new Authenticators.Anonymous(),
-  'session-cookie': (settings) => new Authenticators.SessionCookie(settings),
-}).for(manifest.authentication)
+const authentication = enforcement.authentication(
+  () =>
+    new Authenticators.Schemes({
+      none: () => new Authenticators.Anonymous(),
+      'session-cookie': (settings) =>
+        new Authenticators.SessionCookie(settings),
+    }).for(manifest.authentication),
+  () => new Authenticators.Anonymous(),
+)
 
 const server = new Server(
   manifest,
@@ -28,6 +42,7 @@ const server = new Server(
 )
 
 const log = new Log.JsonLines()
+log.write('guard.started', { enforcement: config.enforcement })
 server.OnRequestHandled.Do((record) => log.write('guard.request', record))
 
 Deno.serve(

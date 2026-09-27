@@ -1,15 +1,21 @@
+import { ENFORCEMENT_LEVELS, type EnforcementLevel } from '@idhn/guard'
 import type * as Environment from '@idhn/environment'
 
 export interface Config {
+  enforcement: EnforcementLevel
   manifestPath: string
-  bundlePath: string
-  policyRegistryPath: string
-  policyDataPath: string | undefined
-  enrichmentPath: string | undefined
   judgeTimeoutMs: number
   upstreamUrl: URL
   port: number
   rejectResponseUrl: URL | undefined
+}
+
+/** What only a guard that asks a judge needs: everything its in-process judge is built from. */
+export interface JudgingConfig {
+  bundlePath: string
+  policyRegistryPath: string
+  policyDataPath: string | undefined
+  enrichmentPath: string | undefined
 }
 
 const DEFAULT_PORT = 8080
@@ -21,13 +27,12 @@ export class ConfigLoader {
 
   load(): Config {
     return {
-      manifestPath: this.environment.requireString('SERVICE_MANIFEST_PATH'),
-      bundlePath: this.environment.requireString('POLICY_BUNDLE_PATH'),
-      policyRegistryPath: this.environment.requireString(
-        'POLICY_REGISTRY_PATH',
+      enforcement: this.environment.oneOf(
+        'ENFORCEMENT',
+        ENFORCEMENT_LEVELS,
+        'full',
       ),
-      policyDataPath: this.environment.optionalString('POLICY_DATA_PATH'),
-      enrichmentPath: this.environment.optionalString('ENRICHMENT_PATH'),
+      manifestPath: this.environment.requireString('SERVICE_MANIFEST_PATH'),
       judgeTimeoutMs: this.environment.positiveNumber(
         'JUDGE_TIMEOUT_MS',
         DEFAULT_JUDGE_TIMEOUT_MS,
@@ -35,6 +40,18 @@ export class ConfigLoader {
       upstreamUrl: this.environment.requireUrl('UPSTREAM_URL'),
       port: this.environment.port('PROXY_PORT', DEFAULT_PORT),
       rejectResponseUrl: this.environment.optionalUrl('REJECT_RESPONSE_URL'),
+    }
+  }
+
+  /** Read only at the `full` enforcement level, the one that builds and asks the judge. */
+  judging(): JudgingConfig {
+    return {
+      bundlePath: this.environment.requireString('POLICY_BUNDLE_PATH'),
+      policyRegistryPath: this.environment.requireString(
+        'POLICY_REGISTRY_PATH',
+      ),
+      policyDataPath: this.environment.optionalString('POLICY_DATA_PATH'),
+      enrichmentPath: this.environment.optionalString('ENRICHMENT_PATH'),
     }
   }
 }

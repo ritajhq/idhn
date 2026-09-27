@@ -79,3 +79,14 @@ Deno.test('Reader.positiveNumber: falls back when unset, and rejects anything bu
     )
   }
 })
+
+Deno.test('Reader.oneOf: returns a listed value, the fallback when unset, and rejects any other', () => {
+  const levels = ['full', 'none'] as const
+  assertEquals(readerOf({ A: 'none' }).oneOf('A', levels, 'full'), 'none')
+  assertEquals(readerOf({}).oneOf('A', levels, 'full'), 'full')
+  assertThrows(
+    () => readerOf({ A: 'some' }).oneOf('A', levels, 'full'),
+    InvalidError,
+    'A must be one of full, none, got "some"',
+  )
+})

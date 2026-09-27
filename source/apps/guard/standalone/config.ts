@@ -1,12 +1,18 @@
+import { ENFORCEMENT_LEVELS, type EnforcementLevel } from '@idhn/guard'
 import type * as Environment from '@idhn/environment'
 
 export interface Config {
+  enforcement: EnforcementLevel
   manifestPath: string
-  judgeServerUrl: URL
   judgeTimeoutMs: number
   upstreamUrl: URL
   port: number
   rejectResponseUrl: URL | undefined
+}
+
+/** What only a guard that asks a judge needs. */
+export interface JudgingConfig {
+  judgeServerUrl: URL
 }
 
 const DEFAULT_PORT = 8080
@@ -18,8 +24,12 @@ export class ConfigLoader {
 
   load(): Config {
     return {
+      enforcement: this.environment.oneOf(
+        'ENFORCEMENT',
+        ENFORCEMENT_LEVELS,
+        'full',
+      ),
       manifestPath: this.environment.requireString('SERVICE_MANIFEST_PATH'),
-      judgeServerUrl: this.environment.requireUrl('JUDGE_SERVER_URL'),
       judgeTimeoutMs: this.environment.positiveNumber(
         'JUDGE_TIMEOUT_MS',
         DEFAULT_JUDGE_TIMEOUT_MS,
@@ -27,6 +37,13 @@ export class ConfigLoader {
       upstreamUrl: this.environment.requireUrl('UPSTREAM_URL'),
       port: this.environment.port('PROXY_PORT', DEFAULT_PORT),
       rejectResponseUrl: this.environment.optionalUrl('REJECT_RESPONSE_URL'),
+    }
+  }
+
+  /** Read only at the `full` enforcement level, the one that asks the judge-server. */
+  judging(): JudgingConfig {
+    return {
+      judgeServerUrl: this.environment.requireUrl('JUDGE_SERVER_URL'),
     }
   }
 }

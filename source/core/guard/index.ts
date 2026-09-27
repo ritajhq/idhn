@@ -7,6 +7,11 @@ export {
 export { Rejection, REJECTION_FOR_IDENTITY } from './rejection.ts'
 export { Guard } from './guard.ts'
 export {
+  Enforcement,
+  ENFORCEMENT_LEVELS,
+  type EnforcementLevel,
+} from './enforcement.ts'
+export {
   type RecordedIdentity,
   type RequestOutcome,
   RequestRecord,
