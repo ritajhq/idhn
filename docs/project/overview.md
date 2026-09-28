@@ -159,6 +159,24 @@ an enrichment lookup keyed by `{auth.subject}` for what the provider cannot say.
 The fixture policies `profile.read`, `report.view` and `place.manage` in
 `source/core/opa/tests/fixtures/` show each pattern.
 
+### What the service receives
+
+A forwarded request tells the protected service who is calling, so the
+service never has to take "who is asking" from a parameter the caller fills
+in. The guard always drops every `x-idhn-*` header the caller sent, then, for
+an authenticated caller, sets:
+
+| Header           | Value                                                                        |
+| ---------------- | ---------------------------------------------------------------------------- |
+| `x-idhn-subject` | The subject.                                                                 |
+| `x-idhn-issuer`  | The issuer.                                                                  |
+| `x-idhn-claims`  | The claims the manifest lists, as base64url-encoded JSON (unpadded).         |
+
+Any other caller (anonymous, invalid, unavailable) gets no `x-idhn-*` header.
+This happens in every enforcement mode (`CallerHeaders`,
+`source/core/guard/http/caller-headers.ts`). The service can trust these
+headers only while it can't be reached except through its guard.
+
 ## Where a policy's facts come from
 
 `Policy.Engine.evaluate` is a pure function of `(policy, context)`. It makes no

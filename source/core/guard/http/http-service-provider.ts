@@ -1,8 +1,10 @@
+import type * as Access from '@idhn/access'
 import { Rejection } from '../rejection.ts'
 import {
   type ServiceProvider,
   ServiceUnreachableError,
 } from '../service-provider.ts'
+import { CallerHeaders } from './caller-headers.ts'
 import type { RejectResponse } from './reject-responses/reject-response.ts'
 
 /** How each reason for rejecting a request is said in HTTP. */
@@ -26,8 +28,9 @@ const REJECTION_HEADERS: Readonly<Record<Rejection, HeadersInit>> = {
 
 /**
  * Carries out a `Guard`'s verdict over HTTP: `forward()` reverse-proxies the
- * request to `upstream`, `reject()` answers with the injected `RejectResponse`
- * (a bare empty body when a service configured no custom page) under the
+ * request to `upstream`, telling it who the caller is (see `CallerHeaders`),
+ * `reject()` answers with the injected `RejectResponse` (a bare empty body
+ * when a service configured no custom page) under the
  * status for the rejection: `403` forbidden, `401` unauthenticated, `503`
  * with `Retry-After` when the caller's identity or the judgement could not be
  * had for now, `502` when the protected service could not be reached. Neither method returns
@@ -47,14 +50,14 @@ export class HttpServiceProvider implements ServiceProvider {
     private readonly rejectResponse: RejectResponse,
   ) {}
 
-  async forward(): Promise<void> {
+  async forward(identity: Access.Identity): Promise<void> {
     const target = new URL(this.request.url)
     target.protocol = this.upstream.protocol
     target.host = this.upstream.host
 
     const response = await fetch(target, {
       method: this.request.method,
-      headers: this.request.headers,
+      headers: new CallerHeaders().describe(this.request.headers, identity),
       body: this.request.body,
       redirect: 'manual',
     }).catch((error: unknown) => {

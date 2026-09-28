@@ -1,3 +1,4 @@
+import type * as Access from '@idhn/access'
 import type { Rejection } from './rejection.ts'
 
 /**
@@ -8,8 +9,12 @@ import type { Rejection } from './rejection.ts'
  * `Decision` — allow/deny semantics stay inside `Guard`'s own orchestration.
  */
 export interface ServiceProvider {
-  /** Throws `ServiceUnreachableError` when the protected service cannot be reached at all; whatever the service answers, errors included, is its answer. */
-  forward(): Promise<void>
+  /**
+   * Hands the request to the protected service, telling it who `identity` is.
+   * Throws `ServiceUnreachableError` when the protected service cannot be
+   * reached at all; whatever the service answers, errors included, is its answer.
+   */
+  forward(identity: Access.Identity): Promise<void>
   reject(rejection: Rejection): Promise<void>
 }
 

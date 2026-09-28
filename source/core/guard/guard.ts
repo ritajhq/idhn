@@ -88,7 +88,7 @@ export class Guard {
     recording.judged(decision)
 
     if (decision.allowed) {
-      return await this.forward(recording)
+      return await this.forward(identity, recording)
     }
 
     return await this.reject(
@@ -97,9 +97,12 @@ export class Guard {
     )
   }
 
-  private async forward(recording: RequestRecording): Promise<void> {
+  private async forward(
+    identity: Access.Identity,
+    recording: RequestRecording,
+  ): Promise<void> {
     try {
-      await this.serviceProvider.forward()
+      await this.serviceProvider.forward(identity)
       recording.forwarded()
     } catch (error) {
       if (!(error instanceof ServiceUnreachableError)) {

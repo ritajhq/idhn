@@ -1,4 +1,5 @@
 import { assertEquals, assertRejects } from '@std/assert'
+import * as Access from '@idhn/access'
 import { HttpServiceProvider } from './http-service-provider.ts'
 import { Rejection } from '../rejection.ts'
 import { ServiceUnreachableError } from '../service-provider.ts'
@@ -44,7 +45,7 @@ Deno.test('HttpServiceProvider.forward: proxies the request to the upstream and 
         new Bare(),
       )
 
-      await provider.forward()
+      await provider.forward(Access.Identity.anonymous())
       const response = await promise
 
       assertEquals(response.status, 200)
@@ -69,7 +70,7 @@ Deno.test('HttpServiceProvider.forward: relays the upstream body', async () => {
         new Bare(),
       )
 
-      await provider.forward()
+      await provider.forward(Access.Identity.anonymous())
       const response = await promise
 
       assertEquals(response.status, 201)
@@ -95,7 +96,7 @@ Deno.test('HttpServiceProvider.forward: does not follow upstream redirects', asy
         new Bare(),
       )
 
-      await provider.forward()
+      await provider.forward(Access.Identity.anonymous())
       const response = await promise
 
       assertEquals(response.status, 302)
@@ -210,7 +211,7 @@ Deno.test('HttpServiceProvider.forward: throws ServiceUnreachableError when the 
   )
 
   await assertRejects(
-    () => provider.forward(),
+    () => provider.forward(Access.Identity.anonymous()),
     ServiceUnreachableError,
     'could not be reached',
   )
@@ -228,7 +229,7 @@ Deno.test("HttpServiceProvider.forward: relays an upstream error response as the
         new Bare(),
       )
 
-      await provider.forward()
+      await provider.forward(Access.Identity.anonymous())
       const response = await promise
 
       assertEquals(response.status, 500)
@@ -242,4 +243,100 @@ Deno.test('HttpServiceProvider.reject: answers an unreachable service 502, witho
 
   assertEquals(response.status, 502)
   assertEquals(response.headers.get('retry-after'), null)
+})
+
+function decodeClaims(header: string | null): unknown {
+  const base64 = header!.replaceAll('-', '+').replaceAll('_', '/')
+  const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0))
+  return JSON.parse(new TextDecoder().decode(bytes))
+}
+
+Deno.test('HttpServiceProvider.forward: tells the upstream who an authenticated caller is', async () => {
+  const claims = { name: 'Alice Ünal', emailVerified: true, role: null }
+  let received: Headers | undefined
+  await withUpstream(
+    (request) => {
+      received = request.headers
+      return new Response(null, { status: 204 })
+    },
+    async (upstream) => {
+      const { promise, resolve } = Promise.withResolvers<Response>()
+      const provider = new HttpServiceProvider(
+        new Request('https://gateway.test/a', { method: 'GET' }),
+        upstream,
+        resolve,
+        new Bare(),
+      )
+
+      await provider.forward(Access.Identity.authenticated('alice', 'portal', claims))
+      await promise
+    },
+  )
+
+  assertEquals(received!.get('x-idhn-subject'), 'alice')
+  assertEquals(received!.get('x-idhn-issuer'), 'portal')
+  assertEquals(decodeClaims(received!.get('x-idhn-claims')), claims)
+})
+
+Deno.test('HttpServiceProvider.forward: drops caller headers the caller sent itself', async () => {
+  let received: Headers | undefined
+  await withUpstream(
+    (request) => {
+      received = request.headers
+      return new Response(null, { status: 204 })
+    },
+    async (upstream) => {
+      const { promise, resolve } = Promise.withResolvers<Response>()
+      const provider = new HttpServiceProvider(
+        new Request('https://gateway.test/a', {
+          method: 'GET',
+          headers: {
+            'x-idhn-subject': 'mallory',
+            'x-idhn-claims': 'forged',
+            'x-idhn-actor': 'mallory',
+            'x-user-id': 'kept',
+          },
+        }),
+        upstream,
+        resolve,
+        new Bare(),
+      )
+
+      await provider.forward(Access.Identity.authenticated('alice', 'portal'))
+      await promise
+    },
+  )
+
+  assertEquals(received!.get('x-idhn-subject'), 'alice')
+  assertEquals(decodeClaims(received!.get('x-idhn-claims')), {})
+  assertEquals(received!.get('x-idhn-actor'), null)
+  assertEquals(received!.get('x-user-id'), 'kept')
+})
+
+Deno.test('HttpServiceProvider.forward: tells the upstream nothing about a caller who is not authenticated', async () => {
+  let received: Headers | undefined
+  await withUpstream(
+    (request) => {
+      received = request.headers
+      return new Response(null, { status: 204 })
+    },
+    async (upstream) => {
+      const { promise, resolve } = Promise.withResolvers<Response>()
+      const provider = new HttpServiceProvider(
+        new Request('https://gateway.test/a', {
+          method: 'GET',
+          headers: { 'x-idhn-subject': 'mallory' },
+        }),
+        upstream,
+        resolve,
+        new Bare(),
+      )
+
+      await provider.forward(Access.Identity.anonymous())
+      await promise
+    },
+  )
+
+  const idhn = [...received!.keys()].filter((name) => name.startsWith('x-idhn-'))
+  assertEquals(idhn, [])
 })

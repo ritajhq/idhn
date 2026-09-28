@@ -71,9 +71,11 @@ class FakePolicyEngine implements Policy.Engine {
 
 class RecordingServiceProvider implements ServiceProvider {
   calls: Array<'forward' | Rejection> = []
+  forwardedAs: Access.Identity | undefined
 
-  forward(): Promise<void> {
+  forward(identity: Access.Identity): Promise<void> {
     this.calls.push('forward')
+    this.forwardedAs = identity
     return Promise.resolve()
   }
 
@@ -242,6 +244,20 @@ function recordsOf(guard: Guard): RequestRecord[] {
 
 const alice = Access.Identity.authenticated('alice', 'https://idp.test')
 
+Deno.test('Guard.execute: forwards the request as the identity it authenticated', async () => {
+  const serviceProvider = new RecordingServiceProvider()
+  const guard = new Guard(
+    new IdentifiedJudge(true),
+    new FakeActionResolver(resolvedAction),
+    new FakeAuthenticator(alice),
+    serviceProvider,
+  )
+
+  await guard.execute()
+
+  assertEquals(serviceProvider.forwardedAs, alice)
+})
+
 Deno.test('Guard.execute: records a forwarded request with its action, caller and the id of the judgement that allowed it', async () => {
   const guard = new Guard(
     new IdentifiedJudge(true),
@@ -354,7 +370,7 @@ class FailingForwardServiceProvider extends RecordingServiceProvider {
     super()
   }
 
-  override forward(): Promise<void> {
+  override forward(_identity: Access.Identity): Promise<void> {
     return Promise.reject(this.error)
   }
 }
