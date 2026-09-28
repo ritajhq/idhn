@@ -25,11 +25,14 @@ export class HttpManifestActionResolver implements ActionResolver {
         continue
       }
 
+      // Extraction may read the body, which a Request allows only once: it
+      // reads a clone, leaving the original's body for the guard to forward
+      // and for a later action to read again.
       const facts = manifestAction.extract === undefined
         ? {}
         : await extractContext(
           manifestAction.extract,
-          this.request,
+          this.request.clone(),
           matchResult,
         )
       if (facts === null) {

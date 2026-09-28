@@ -66,3 +66,43 @@ Deno.test('HttpManifestActionResolver.resolve: returns null when no action match
 
   assertEquals(await resolver.resolve(), null)
 })
+
+const bodyManifest: HttpManifest = parseManifest({
+  id: 'places',
+  actions: [
+    {
+      name: 'profile.get',
+      match: { method: 'POST', path: '/rpc' },
+      extract: [{ from: { property: 'body', type: 'json', using: 'query' }, as: 'placeId' }],
+    },
+    {
+      name: 'profile.update',
+      match: { method: 'POST', path: '/rpc' },
+      extract: [{ from: { property: 'body', type: 'json', using: 'action' }, as: 'placeId' }],
+    },
+  ],
+})
+
+Deno.test('HttpManifestActionResolver.resolve: leaves the request body unread, so a resolved request can still be forwarded', async () => {
+  const body = JSON.stringify({ query: 'p-1' })
+  const request = new Request('https://example.test/rpc', { method: 'POST', body })
+  const resolver = new HttpManifestActionResolver(bodyManifest, request)
+
+  const resolved = await resolver.resolve()
+
+  assertEquals(resolved?.context.facts, { placeId: 'p-1' })
+  assertEquals(await request.text(), body)
+})
+
+Deno.test('HttpManifestActionResolver.resolve: reads the body again for a later action after an earlier one read it and fell through', async () => {
+  const request = new Request('https://example.test/rpc', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'p-2' }),
+  })
+  const resolver = new HttpManifestActionResolver(bodyManifest, request)
+
+  const resolved = await resolver.resolve()
+
+  assertEquals(resolved?.action.name, 'places.profile.update')
+  assertEquals(resolved?.context.facts, { placeId: 'p-2' })
+})
