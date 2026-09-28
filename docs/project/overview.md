@@ -22,6 +22,7 @@ rationale.
 | `guard/embedded`   | `@idhn/guard-embedded`   | HTTP server  | Reverse proxy that runs its Judge in-process, with no separate judge       |
 | `fake-service`     | `@idhn/fake-service`     | HTTP server  | Stand-in protected service that echoes what it received (demo only)        |
 | `judge/server`     | `@idhn/judge-server`     | HTTP server  | Serves a `Judge.Behavior` over HTTP; internal only, never exposed publicly |
+| `policy/builder`   | `@idhn/policy-builder`   | HTTP server  | Checks, tests and compiles policy sources; judges pull the result          |
 | `web`              | —                        | Web frontend | React + React Router UI scaffold (early stage)                             |
 
 ## Deployment topologies
@@ -66,6 +67,11 @@ actions:
     match: { method: POST, path: /invoices/:id/approve }
     extract: [{ from: { property: path, using: id }, as: invoiceId }]
 ```
+
+A `body` extract reads a `json` or `form` body by a dot-path (`using: data.place`)
+or, when `using` starts with `/`, by a JSON Pointer (`using: /data/action.place`),
+which reaches keys that themselves contain dots. Extraction reads a copy of the
+request, so the guard still forwards the body untouched.
 
 Everything under `match` and `from` is the vocabulary of that protocol. The
 manifest code (`source/core/guard/manifest/`) keeps the protocol-neutral part
@@ -163,9 +169,11 @@ the `auth` fact above, there are three sources, from most to least static:
    body or constant values into the `Context`. This happens in the Guard.
 2. **Reference data (`data`).** For slow-changing lists such as an allow-list,
    `POLICY_DATA_PATH` points to a JSON file that `OPA.PolicyEngine.load` hands
-   to OPA as Rego's `data` document. Policies read `data.<key>`. It is fixed for
-   the engine's lifetime, so changing it means restarting the judge, the same as
-   a new bundle.
+   to OPA as Rego's `data` document (or it comes as `data.json` in a policy
+   builder's sources). Policies read `data.<key>`. It is fixed for the engine's
+   lifetime: a judge pulling from a policy builder loads a new engine with each
+   new policy set (see [`judge/server`](#judgeserver)), while one reading files
+   needs a restart.
 3. **Enrichment.** For live lookups, `ENRICHMENT_PATH` points to a YAML file of
    HTTP lookups that `Judge.Local` runs before evaluating, but only once at
    least one policy governs the action.
@@ -358,25 +366,114 @@ Services extend that image (`FROM guard/base`) and call
 
 ### `judge/server`
 
-The Judge as its own non-public process. At startup
-([main.ts](../../source/apps/judge/server/main.ts)) it loads the OPA WASM bundle
-into an `OPA.PolicyEngine` and loads a `Policy.Registries.File` from YAML. It
-combines them in a `Judge.Local` that uses a `DenyOverridesStrategy`, which
-defaults to deny. It then exposes that Judge over HTTP with `Judge.Http.Server`.
-It only reads the registry and never writes to it.
+The Judge as its own non-public process
+([main.ts](../../source/apps/judge/server/main.ts)). It judges with a policy
+set (`Distribution.PolicySet`: the OPA WASM bundle, the registry, and
+optionally the enrichment lookups and the `data` document), which
+`JudgeAssembly` builds into a `Judge.Local` that uses a
+`DenyOverridesStrategy`, defaulting to deny. It serves that judge over HTTP
+with `Judge.Http.Server`, through a `Judge.Reloadable`, so a new set takes
+effect without a restart. It only reads the registry and never writes to it.
 
-| Env var                | Required | Default | Meaning                                                          |
-| ---------------------- | -------- | ------- | ---------------------------------------------------------------- |
-| `POLICY_BUNDLE_PATH`   | yes      | —       | OPA WASM policy bundle                                           |
-| `POLICY_REGISTRY_PATH` | yes      | —       | YAML file of action → policy associations                        |
-| `POLICY_DATA_PATH`     | no       | —       | JSON file loaded as Rego's `data`                                |
-| `ENRICHMENT_PATH`      | no       | —       | YAML file of enrichment lookups                                  |
-| `MAX_DECISION_MS`      | no       | `5000`  | Longest a judgement may take for a caller that sends no deadline |
-| `JUDGE_PORT`           | no       | `8081`  | Listening port                                                   |
+It takes its policy set from one of two places:
+
+- **A policy builder** (`POLICY_SOURCE_URL`), the way to run it in production.
+  `PolicyPuller` fetches the builder's current set at startup and then asks
+  again every `POLICY_POLL_MS`, with the `ETag` of the set it has, so an
+  unchanged set costs an empty `304`. `PolicyLoader` builds each newer set into
+  a judge and hands it to the `Judge.Reloadable`: a judgement already under way
+  finishes with the judge it started with, and a set that fails to build keeps
+  the last good judge in place. The judge keeps nothing of its own, so any
+  number of replicas can pull from the same builder, and a new or restarted
+  one simply fetches the current set. Until its first set loads, every
+  judgement fails as unavailable, so the guard answers `503` with
+  `Retry-After`. A builder that can't be reached, or has nothing yet, only
+  delays new policies.
+- **Files** (`POLICY_BUNDLE_PATH` and the others), read once at startup, as the
+  demo does. Changing them means restarting the judge.
+
+Each load is logged as `judge.policies_loaded` or `judge.policies_load_failed`
+with the set's version. Pulling going wrong is logged once as
+`judge.policies_pull_failed`, not at every poll, and its end as
+`judge.policies_pull_recovered`.
+
+| Env var                | Required         | Default | Meaning                                                          |
+| ---------------------- | ---------------- | ------- | ---------------------------------------------------------------- |
+| `POLICY_SOURCE_URL`    | no               | —       | The policy builder to pull policy sets from                      |
+| `POLICY_POLL_MS`       | no               | `5000`  | How often to ask the builder for a newer set                     |
+| `POLICY_BUNDLE_PATH`   | without a source | —       | OPA WASM policy bundle                                           |
+| `POLICY_REGISTRY_PATH` | without a source | —       | YAML file of action → policy associations                        |
+| `POLICY_DATA_PATH`     | no               | —       | JSON file loaded as Rego's `data`                                |
+| `ENRICHMENT_PATH`      | no               | —       | YAML file of enrichment lookups                                  |
+| `MAX_DECISION_MS`      | no               | `5000`  | Longest a judgement may take for a caller that sends no deadline |
+| `JUDGE_PORT`           | no               | `8081`  | Listening port                                                   |
 
 Run it with `deno task start`. It is shipped as
 `source/ship/judge/server/Dockerfile`, and the demo ships it with its
 configuration as `source/ship/demo/judge/`.
+
+### `policy/builder`
+
+Turns policy sources into the policy sets judges pull
+([main.ts](../../source/apps/policy/builder/main.ts)), so no judge needs
+rebuilding or restarting when a policy changes. Its sources are a directory
+laid out as
+
+```
+policies/*.rego    one policy per package: `package shop.admin` is the policy
+                   a registry names `shop.admin`; `*_test.rego` are its tests
+policies.yaml      which policies govern which actions
+enrichment.yaml    optional: the lookups a judge makes before evaluating
+data.json          optional: Rego's `data` document
+```
+
+`Compiler` refuses a source tree with every problem it finds at once: a
+registry naming a policy no file declares, a malformed registry, enrichment or
+`data`, and whatever `opa check` reports. It then runs `opa test` when there are
+tests, and compiles with `opa build`, one entrypoint per package's `allow` rule.
+This is the place for further Rego rules to enforce. `Builds` publishes each
+set that compiles to the `Distribution.Publication` judges pull from, at
+`GET /policies` (`Distribution.Http.Server`, with an `ETag` and `304`, or `503`
+before anything has been published). A refused tree publishes nothing, so
+judges keep the last good set. Each outcome is logged as `builder.built` or
+`builder.refused`, with the version and the problems.
+
+`POLICY_SOURCE` picks where the sources come from, one per deployment:
+
+- **`upload`** (the default): `PUT /sources` takes a tar of the sources (for
+  one, `git archive HEAD` of a policies repository), versioned by its
+  `x-policy-version` header. It is built on the spot and answered `200` with
+  the version, `422` with every problem, or `400` for what isn't a tar. Only an
+  upload that built is kept in `STATE_DIR`, and published again after a
+  restart. This is the builder's only state, so it runs as one instance.
+- **`git`**: clones `GIT_URL` at `GIT_REF` and fetches it every `GIT_POLL_MS`,
+  each new commit versioned by its id. A clone or fetch that fails is logged
+  as `builder.source_failed` and tried again at the next poll.
+- **`directory`**: a local directory (`SOURCE_DIR`), watched with
+  `Deno.watchFs`, or hashed every `SOURCE_POLL_MS` where the filesystem gives
+  no change notifications (`SOURCE_WATCH=poll`), each change versioned by that
+  hash. For running it by hand.
+
+`GET /health` answers with the version published.
+
+| Env var          | Required     | Default                   | Meaning                                    |
+| ---------------- | ------------ | ------------------------- | ------------------------------------------ |
+| `POLICY_SOURCE`  | no           | `upload`                  | `upload`, `git` or `directory`             |
+| `STATE_DIR`      | no           | `/var/lib/policy-builder` | Where the last good upload is kept         |
+| `GIT_URL`        | for `git`    | —                         | Repository to clone                        |
+| `GIT_REF`        | no           | `main`                    | Branch or tag to follow                    |
+| `GIT_POLL_MS`    | no           | `30000`                   | How often to fetch                         |
+| `GIT_WORK_DIR`   | no           | `/tmp/policy-sources`     | Where to clone                             |
+| `SOURCE_DIR`     | for `directory` | —                      | Directory of sources                       |
+| `SOURCE_WATCH`   | no           | `native`                  | `native` (`Deno.watchFs`) or `poll`        |
+| `SOURCE_POLL_MS` | no           | `2000`                    | How often to hash, with `poll`             |
+| `OPA_PATH`       | no           | `opa`                     | The `opa` CLI                              |
+| `GIT_PATH`       | no           | `git`                     | The `git` CLI                              |
+| `BUILDER_PORT`   | no           | `8082`                    | Listening port                             |
+
+`PUT /sources` has no authentication: keep the builder on an internal network,
+never routed publicly. It is shipped as `source/ship/policy/builder/Dockerfile`,
+which carries `git` and the static `opa` binary.
 
 ### `fake-service`
 

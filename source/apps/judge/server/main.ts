@@ -1,40 +1,50 @@
+import * as Distribution from '@idhn/distribution'
 import * as Judge from '@idhn/judge'
-import * as OPA from '@idhn/opa'
-import * as Policy from '@idhn/policy'
 import * as Environment from '@idhn/environment'
 import * as Log from '@idhn/log'
-import { ConfigLoader } from './config.ts'
+import { ConfigLoader, type PoliciesConfig } from './config.ts'
+import { JudgeAssembly } from './judge-assembly.ts'
+import { PolicyFiles } from './policy-files.ts'
+import { PolicyLoader } from './policy-loader.ts'
+import { PolicyPuller } from './policy-puller.ts'
 
 const config = new ConfigLoader(new Environment.Reader(Deno.env)).load()
-
-/**
- * Rego bundle file.
- */
-const bundle = await Deno.readFile(config.bundlePath)
-
-/**
- * Data source file for opa engine.
- */
-const data = await new OPA.DataSource(config.policyDataPath).load()
-
-const engine = await OPA.PolicyEngine.load(bundle, data)
-
-const registry = await Policy.Registries.File.load(
-  config.policyRegistryPath,
-)
-const enricher = await new Judge.Enrichers.Source(config.enrichmentPath).load()
-const deny_strategy = new Judge.DenyOverridesStrategy(new Judge.Decision(false))
-
-const judge = new Judge.Local(
-  registry,
-  engine,
-  deny_strategy,
-  enricher,
-  config.maxDecisionMs,
-)
-
 const log = new Log.JsonLines()
+
+/**
+ * The judge the server asks. It judges with the last policy set loaded, and
+ * is unavailable (503) until one first is — so the server can start before
+ * its policies are published.
+ */
+const judge = new Judge.Reloadable()
 judge.OnDecision.Do((record) => log.write('judge.decision', record))
+
+const loader = new PolicyLoader(new JudgeAssembly(config.maxDecisionMs), judge)
+loader.OnLoaded.Do((set) => log.write('judge.policies_loaded', { version: set.version }))
+loader.OnFailed.Do((set, error) =>
+  log.write('judge.policies_load_failed', {
+    version: set.version,
+    error: error instanceof Error ? error.message : String(error),
+  })
+)
+
+/** Where policy sets come from: files read once, or a policy builder pulled from for as long as the judge runs. */
+const origins: { [K in PoliciesConfig['kind']]: (policies: Extract<PoliciesConfig, { kind: K }>) => Promise<void> } = {
+  files: async (policies) => {
+    const files = new PolicyFiles(policies.bundlePath, policies.registryPath, policies.dataPath, policies.enrichmentPath)
+    await loader.load(await files.read())
+  },
+  builder: async (policies) => {
+    const puller = new PolicyPuller(new Distribution.Http.Client(policies.url), policies.pollMs)
+    puller.OnPolicySet.Do((set) => loader.load(set))
+    puller.OnFailed.Do((error) => log.write('judge.policies_pull_failed', { error: error instanceof Error ? error.message : String(error) }))
+    puller.OnRecovered.Do(() => log.write('judge.policies_pull_recovered', {}))
+    await puller.start()
+  },
+}
+// Each origin takes its own kind's settings; the lookup can't see that
+// `config.policies.kind` and `config.policies` agree, so it's told.
+await (origins[config.policies.kind] as (policies: PoliciesConfig) => Promise<void>)(config.policies)
 
 const server = new Judge.Http.Server(judge)
 
