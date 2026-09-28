@@ -7,3 +7,5 @@ build:
     kit: deno.bundle
   judge/server:
     kit: deno.bundle
+  policy/builder:
+    kit: deno.bundle
