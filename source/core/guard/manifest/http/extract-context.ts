@@ -88,17 +88,31 @@ async function extractOne(
       if (from.type === 'text') {
         return parsed
       }
-      const value = getByDotPath(parsed, from.using)
+      const value = getByPath(parsed, from.using)
       return value === undefined ? MISSING : value
     }
   }
 }
 
-function getByDotPath(value: unknown, path: string): unknown {
-  return path.split('.').reduce<unknown>((current, key) => {
+/**
+ * Reads the value at `path` within a parsed body: an RFC 6901 JSON Pointer
+ * when it starts with `/` (`/data/action.place`, for keys that themselves
+ * contain dots), otherwise a dot-path (`data.place`).
+ */
+function getByPath(value: unknown, path: string): unknown {
+  const keys = path.startsWith('/') ? pointerKeys(path) : path.split('.')
+  return keys.reduce<unknown>((current, key) => {
     if (current === null || typeof current !== 'object') {
       return undefined
     }
     return (current as Record<string, unknown>)[key]
   }, value)
+}
+
+/** Splits a JSON Pointer into its reference tokens, unescaping `~1` (`/`) and then `~0` (`~`). */
+function pointerKeys(pointer: string): string[] {
+  return pointer
+    .slice(1)
+    .split('/')
+    .map((token) => token.replaceAll('~1', '/').replaceAll('~0', '~'))
 }

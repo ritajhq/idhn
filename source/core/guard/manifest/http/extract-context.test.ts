@@ -182,3 +182,39 @@ Deno.test('extractContext: returns null when a required body field is absent', a
 
   assertEquals(facts, null)
 })
+
+Deno.test('extractContext: reads a JSON body field by JSON Pointer, even when its key contains dots', async () => {
+  const entries: ExtractEntry[] = [{
+    from: { property: 'body', type: 'json', using: '/data/action.profile.place' },
+    as: 'placeId',
+  }]
+  const body = JSON.stringify({ data: { 'action.profile.place': 'p-1' } })
+
+  const facts = await extractContext(entries, request({ body }), noParams)
+
+  assertEquals(facts, { placeId: 'p-1' })
+})
+
+Deno.test('extractContext: unescapes ~1 and ~0 in a JSON Pointer', async () => {
+  const entries: ExtractEntry[] = [{
+    from: { property: 'body', type: 'json', using: '/a~1b/c~0d' },
+    as: 'value',
+  }]
+  const body = JSON.stringify({ 'a/b': { 'c~d': 'found' } })
+
+  const facts = await extractContext(entries, request({ body }), noParams)
+
+  assertEquals(facts, { value: 'found' })
+})
+
+Deno.test('extractContext: treats a JSON Pointer to nothing as missing', async () => {
+  const entries: ExtractEntry[] = [{
+    from: { property: 'body', type: 'json', using: '/data/absent' },
+    as: 'placeId',
+  }]
+  const body = JSON.stringify({ data: {} })
+
+  const facts = await extractContext(entries, request({ body }), noParams)
+
+  assertEquals(facts, null)
+})

@@ -18,6 +18,11 @@ export type FromProperty = 'path' | 'query' | 'header' | 'body' | 'constant'
 /** Where an extracted context value comes from, and how to read it. */
 export interface From {
   property: FromProperty
+  /**
+   * What to read. For `"body"` with `json` or `form`, a dot-path (`data.place`)
+   * or, when it starts with `/`, a JSON Pointer (`/data/action.place`) for keys
+   * that themselves contain dots.
+   */
   using: string
   /** Only meaningful when `property` is `"body"`. */
   type?: BodyType
