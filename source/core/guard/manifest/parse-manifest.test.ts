@@ -367,3 +367,110 @@ Deno.test('parseManifest: rejects a session-cookie timeout_ms that is not a posi
     'timeout_ms must be a positive number',
   )
 })
+
+Deno.test('parseManifest: parses session-bearer settings, defaulting what is left out', () => {
+  const manifest = parseManifest({
+    ...validRaw,
+    authentication: {
+      scheme: 'session-bearer',
+      session_url: 'http://auth.internal/api/auth/get-session',
+      issuer: 'portal',
+    },
+  })
+
+  assertEquals(manifest.authentication, {
+    scheme: 'session-bearer',
+    sessionUrl: 'http://auth.internal/api/auth/get-session',
+    issuer: 'portal',
+    claims: ['username', 'email', 'name', 'emailVerified'],
+    ttlSeconds: 5,
+    timeoutMs: 2000,
+  })
+})
+
+Deno.test('parseManifest: rejects session-bearer settings without a session_url', () => {
+  assertThrows(
+    () =>
+      parseManifest({
+        ...validRaw,
+        authentication: { scheme: 'session-bearer' },
+      }),
+    ManifestParseError,
+    'manifest.authentication.session_url',
+  )
+})
+
+Deno.test('parseManifest: parses a list of schemes a caller may choose from, in order', () => {
+  const session = { session_url: 'http://auth.internal/api/auth/get-session' }
+  const manifest = parseManifest({
+    ...validRaw,
+    authentication: [
+      { scheme: 'session-cookie', ...session },
+      { scheme: 'session-bearer', ...session, ttl_seconds: 0 },
+    ],
+  })
+
+  assertEquals(manifest.authentication, [
+    {
+      scheme: 'session-cookie',
+      sessionUrl: 'http://auth.internal/api/auth/get-session',
+      cookie: 'better-auth.session_token',
+      issuer: 'http://auth.internal',
+      claims: ['username', 'email', 'name', 'emailVerified'],
+      ttlSeconds: 5,
+      timeoutMs: 2000,
+    },
+    {
+      scheme: 'session-bearer',
+      sessionUrl: 'http://auth.internal/api/auth/get-session',
+      issuer: 'http://auth.internal',
+      claims: ['username', 'email', 'name', 'emailVerified'],
+      ttlSeconds: 0,
+      timeoutMs: 2000,
+    },
+  ])
+})
+
+Deno.test('parseManifest: rejects an empty list of schemes', () => {
+  assertThrows(
+    () => parseManifest({ ...validRaw, authentication: [] }),
+    ManifestParseError,
+    'manifest.authentication must list at least one scheme',
+  )
+})
+
+Deno.test('parseManifest: rejects none in a list of schemes', () => {
+  assertThrows(
+    () =>
+      parseManifest({
+        ...validRaw,
+        authentication: [
+          {
+            scheme: 'session-bearer',
+            session_url: 'http://auth.internal/api/auth/get-session',
+          },
+          { scheme: 'none' },
+        ],
+      }),
+    ManifestParseError,
+    'manifest.authentication[1].scheme "none" can\'t be listed',
+  )
+})
+
+Deno.test('parseManifest: points at the listed scheme whose settings are wrong', () => {
+  assertThrows(
+    () =>
+      parseManifest({
+        ...validRaw,
+        authentication: [
+          {
+            scheme: 'session-cookie',
+            session_url: 'http://auth.internal/api/auth/get-session',
+          },
+          { scheme: 'session-bearer' },
+        ],
+      }),
+    ManifestParseError,
+    'manifest.authentication[1].session_url',
+  )
+})

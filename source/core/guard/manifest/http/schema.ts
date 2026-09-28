@@ -49,25 +49,40 @@ export interface NoAuthentication {
 }
 
 /**
- * A session carried in a cookie and kept server-side by an auth server
- * (BetterAuth, for one): the session cookie is forwarded to `sessionUrl`,
- * which answers with the session's user, or with `null` when there is no
- * valid session.
+ * What every scheme backed by a server-side session shares: the presented
+ * session token is forwarded to an auth server (BetterAuth, for one) at
+ * `sessionUrl`, which answers with the session's user, or with `null` when
+ * there is no valid session. Schemes differ only in how the request carries
+ * the token.
  */
-export interface SessionCookieAuthentication {
-  scheme: 'session-cookie'
+export interface SessionAuthentication {
   /** The auth server's session endpoint, e.g. BetterAuth's `GET /api/auth/get-session`. */
   sessionUrl: string
-  /** The session cookie's name. A request without it is anonymous and costs no lookup. */
-  cookie: string
   /** Who vouches for the identity, reported as `auth.issuer`. */
   issuer: string
   /** The user fields copied into `auth.claims`. The user's `id` is always `auth.subject`. */
   claims: readonly string[]
-  /** How long an answer may be reused for the same cookie. The cost is revocation lag. `0` disables caching. */
+  /** How long an answer may be reused for the same token. The cost is revocation lag. `0` disables caching. */
   ttlSeconds: number
   /** How long to wait for the auth server's whole answer before the identity counts as unavailable. */
   timeoutMs: number
+}
+
+/** A session token carried in a cookie, as a browser presents it. */
+export interface SessionCookieAuthentication extends SessionAuthentication {
+  scheme: 'session-cookie'
+  /** The session cookie's name. A request without it is anonymous and costs no lookup. */
+  cookie: string
+}
+
+/**
+ * A session token carried in `Authorization: Bearer <token>`, as a CLI or
+ * other non-browser client presents it (BetterAuth's device flow hands one
+ * out). The auth server must accept it that way (BetterAuth's `bearer`
+ * plugin). A request without a bearer token is anonymous and costs no lookup.
+ */
+export interface SessionBearerAuthentication extends SessionAuthentication {
+  scheme: 'session-bearer'
 }
 
 /**
@@ -79,17 +94,35 @@ export interface SessionCookieAuthentication {
 export interface HttpAuthentications {
   none: NoAuthentication
   'session-cookie': SessionCookieAuthentication
+  'session-bearer': SessionBearerAuthentication
 }
 
 export type HttpAuthenticationScheme = keyof HttpAuthentications
 
-/** The one authentication scheme a service declares, with its settings. */
+/** One authentication scheme, with its settings. */
 export type HttpAuthentication = HttpAuthentications[HttpAuthenticationScheme]
+
+/** A scheme a caller can present a credential for, which is every scheme but `none`. */
+export type ChallengingAuthentication = Exclude<
+  HttpAuthentication,
+  NoAuthentication
+>
+
+/**
+ * How a service authenticates: one scheme, or several a caller may choose
+ * from (a browser's cookie or a CLI's bearer token, for one), in precedence
+ * order. With several, the first scheme whose credential a request presents
+ * decides who is asking; `none` can't be one of them, since it presents
+ * nothing.
+ */
+export type HttpAuthenticationDeclaration =
+  | HttpAuthentication
+  | readonly ChallengingAuthentication[]
 
 /** A service's declared actions: how to recognize them from an HTTP request, and what context to extract. */
 export interface HttpManifest {
   protocol: 'http'
   id: string
-  authentication: HttpAuthentication
+  authentication: HttpAuthenticationDeclaration
   actions: HttpManifestAction[]
 }

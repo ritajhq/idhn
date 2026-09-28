@@ -109,20 +109,21 @@ that ignores `auth` (a public page) keeps working.
 When the judge denies a request, the scheme's `Authenticator` says how to answer
 (`Rejection`), and the HTTP guard maps that to a status:
 
-| Caller's identity        | `session-cookie`              | `none`          |
-| ------------------------ | ----------------------------- | --------------- |
-| `authenticated`          | `403` forbidden               | —               |
-| `anonymous` or `invalid` | `401` unauthenticated         | `403` forbidden |
-| `unavailable`            | `503` unavailable (try again) | —               |
+| Caller's identity        | `session-cookie`, `session-bearer` | `none`          |
+| ------------------------ | ---------------------------------- | --------------- |
+| `authenticated`          | `403` forbidden                    | —               |
+| `anonymous` or `invalid` | `401` unauthenticated              | `403` forbidden |
+| `unavailable`            | `503` unavailable (try again)      | —               |
 
 A request that matches no action is always `403`. Every status serves the same
 reject page (`REJECT_RESPONSE_URL`), or an empty body. Nothing else may write
 `auth`: the manifest parser and the enrichment definition reject `as: auth`, and
 `Context.with()` throws on any conflict.
 
-A manifest declares exactly one scheme in an `authentication` block, inside its
-protocol-tagged section. The parser dispatches on `scheme` the way it does on
-`protocol`; with no block, the scheme is `none` and every request is anonymous.
+A manifest declares how a service authenticates in an `authentication` block,
+inside its protocol-tagged section. The parser dispatches on `scheme` the way
+it does on `protocol`; with no block, the scheme is `none` and every request is
+anonymous.
 
 ```yaml
 id: dashboard
@@ -143,6 +144,31 @@ authentication:
 actions: [...]
 ```
 
+A service that different kinds of caller reach, such as a console used from a
+browser (session cookie) and from a CLI (bearer token), lists the schemes they
+may choose from instead, in precedence order:
+
+```yaml
+authentication:
+  - scheme: session-cookie
+    session_url: http://auth.internal/api/auth/get-session
+    issuer: portal
+  - scheme: session-bearer
+    session_url: http://auth.internal/api/auth/get-session
+    issuer: portal
+```
+
+The first listed scheme whose credential a request presents decides who is
+asking and how a denial is answered (`Authenticators.FirstPresented`). A request
+that presents none is anonymous, answered as the first scheme answers. A later
+scheme is never tried once an earlier one found its credential invalid or
+unavailable, so a bad credential can't be hidden behind another one. `none`
+can't be listed, since it presents nothing. A list keeps each scheme one
+technology with its own settings, rather than giving `session-cookie` a bearer
+option, so any schemes can be combined (a future token scheme next to the
+cookie, say); the cost is repeating shared settings, which a YAML anchor
+(`<<: *session`) can avoid.
+
 Settings in the manifest are non-secret by design. Each guard's `main.ts` wires
 the schemes that deployment supports (`Authenticators.Schemes`, also where a
 future scheme would get its secrets from the environment), and startup fails
@@ -152,6 +178,7 @@ with `UnsupportedSchemeError` if the manifest names another one.
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `none`           | Everyone is anonymous (`Authenticators.Anonymous`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `session-cookie` | A server-side session in a cookie (the portal's BetterAuth). Without the cookie the request is anonymous and costs no lookup. Otherwise only that cookie is forwarded to `session_url`: a session makes `user.id` the subject and the listed user fields the claims, `null` makes it invalid, and an error, an unreachable auth server, no answer within `timeout_ms`, or an answer that is not a session makes it unavailable (never cached). Answers are cached per cookie hash for `ttl_seconds`, the revocation lag. |
+| `session-bearer` | The same server-side session, with its token in `Authorization: Bearer <token>`, as a CLI presents it (the token BetterAuth's device flow hands out). Without a bearer token (no `Authorization`, or another auth scheme) the request is anonymous and costs no lookup. Otherwise only that header is forwarded to `session_url`, which must accept it (BetterAuth's `bearer` plugin); it takes the same settings but `cookie`, and answers, errors and caching (per token hash) work as for `session-cookie`.           |
 
 Identity providers rarely know roles or relationships, so policies should not
 hardcode usernames: use `data` (for example `data.roles[input.auth.subject]`) or

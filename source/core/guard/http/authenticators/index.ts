@@ -1,4 +1,6 @@
 export type { Scheme } from './scheme.ts'
 export { Anonymous } from './anonymous.ts'
 export { SessionCookie } from './session-cookie.ts'
+export { SessionBearer } from './session-bearer.ts'
+export { FirstPresented } from './first-presented.ts'
 export { Schemes, type Supported, UnsupportedSchemeError } from './schemes.ts'

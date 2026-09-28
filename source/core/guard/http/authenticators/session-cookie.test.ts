@@ -3,26 +3,9 @@ import type { SessionCookieAuthentication } from '../../manifest/http/schema.ts'
 import * as Access from '@idhn/access'
 import { Rejection } from '../../rejection.ts'
 import { SessionCookie } from './session-cookie.ts'
+import { aliceSession, withAuthServer } from './tests/auth-server.ts'
 
 const COOKIE = 'better-auth.session_token'
-
-async function withAuthServer(
-  handler: (request: Request) => Response | Promise<Response>,
-  run: (sessionUrl: string) => Promise<void>,
-): Promise<void> {
-  const controller = new AbortController()
-  const server = Deno.serve(
-    { port: 0, signal: controller.signal, onListen: () => {} },
-    handler,
-  )
-  const addr = server.addr as Deno.NetAddr
-  try {
-    await run(`http://localhost:${addr.port}/api/auth/get-session`)
-  } finally {
-    controller.abort()
-    await server.finished
-  }
-}
 
 function settings(
   sessionUrl: string,
@@ -44,18 +27,6 @@ function requestWithCookie(cookie?: string): Request {
   return new Request('https://dashboard.test/places', {
     headers: cookie === undefined ? {} : { cookie },
   })
-}
-
-const aliceSession = {
-  session: { id: 's-1', userId: 'u-1', expiresAt: '2099-01-01T00:00:00Z' },
-  user: {
-    id: 'u-1',
-    username: 'alice',
-    email: 'alice@example.test',
-    name: 'Alice',
-    emailVerified: true,
-    image: null,
-  },
 }
 
 Deno.test('SessionCookie: a request without the session cookie is anonymous and costs no lookup', async () => {
@@ -265,7 +236,7 @@ Deno.test('SessionCookie: does not cache an unavailable identity', async () => {
   )
 })
 
-Deno.test('SessionCookie: challenges a denied caller without a valid session, and forbids an authenticated one', async () => {
+Deno.test('SessionCookie: challenges a denied caller without a valid session, and forbids an authenticated one', () => {
   const authenticator = new SessionCookie(
     settings('http://localhost:1/api/auth/get-session'),
   ).authenticatorFor(requestWithCookie())

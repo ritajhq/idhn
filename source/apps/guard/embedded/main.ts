@@ -50,6 +50,8 @@ const authentication = enforcement.authentication(
       none: () => new Authenticators.Anonymous(),
       'session-cookie': (settings) =>
         new Authenticators.SessionCookie(settings),
+      'session-bearer': (settings) =>
+        new Authenticators.SessionBearer(settings),
     }).for(manifest.authentication),
   () => new Authenticators.Anonymous(),
 )
