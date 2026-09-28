@@ -1,7 +1,8 @@
 import { assertEquals, assertRejects } from '@std/assert'
 import * as Access from '@idhn/access'
 import { Identifier } from '../identifier.ts'
-import { File, MalformedFileError } from './file.ts'
+import { File } from './file.ts'
+import { MalformedFileError } from './associations.ts'
 
 const action = new Access.Action('invoice.approve')
 const policyA = new Identifier('policy.a')

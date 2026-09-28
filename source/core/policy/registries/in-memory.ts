@@ -2,9 +2,15 @@ import type * as Access from '@idhn/access'
 import type { Identifier } from '../identifier.ts'
 import type { Registry } from '../registry.ts'
 
-/** A `Registry` backed by an in-memory map. Useful for tests and early development. */
+/**
+ * A `Registry` backed by an in-memory map, empty or starting from given
+ * associations (e.g. `Associations.parse`d from a registry document that
+ * arrived some other way than as a file). Also useful for tests.
+ */
 export class InMemory implements Registry {
-  private readonly policiesByAction = new Map<string, Identifier[]>()
+  constructor(
+    private readonly policiesByAction: Map<string, Identifier[]> = new Map(),
+  ) {}
 
   // deno-lint-ignore require-await
   async associate(action: Access.Action, policy: Identifier): Promise<void> {

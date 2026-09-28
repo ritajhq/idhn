@@ -31,10 +31,19 @@ export class Source {
     if (this.path === undefined) {
       return new Passthrough()
     }
+    return new Definitions().parse(await Deno.readTextFile(this.path))
+  }
+}
 
-    const raw = parseYaml(await Deno.readTextFile(this.path))
+/**
+ * Builds the `Enricher` a lookups document's YAML text declares (the shape
+ * `Source` documents), wherever the text came from. Throws
+ * `InvalidDefinitionError` for anything else.
+ */
+export class Definitions {
+  parse(text: string): Enricher {
     const lookups = this.expectArray(
-      this.expectObject(raw, 'file').lookups,
+      this.expectObject(parseYaml(text), 'file').lookups,
       'lookups',
     )
     return new Chain(

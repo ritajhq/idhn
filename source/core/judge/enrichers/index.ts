@@ -5,4 +5,4 @@ export {
   type HttpLookupDefinition,
   LookupError,
 } from './http-lookup.ts'
-export { InvalidDefinitionError, Source } from './source.ts'
+export { Definitions, InvalidDefinitionError, Source } from './source.ts'
