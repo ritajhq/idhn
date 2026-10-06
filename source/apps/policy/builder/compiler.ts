@@ -20,14 +20,18 @@ const TEST_SUFFIX = '_test.rego'
  * `opa test` when there are tests), it holds the conventions judges rely on:
  * every policy the registry names is a package among the policies, and every
  * package is compiled with its `allow` rule as the entrypoint judges evaluate
- * — the place for any further Rego rules to enforce.
+ * — and its `show` rule too, when it has one, saying how the answer's
+ * restricted fields may be shown — the place for any further Rego rules to
+ * enforce.
  */
 export class Compiler {
   constructor(private readonly opa: Opa) {}
 
   async compile(tree: SourceTree): Promise<Distribution.PolicySet> {
     const policies = await this.policyFiles(tree)
-    const packages = await this.packagesOf(policies.filter((file) => !file.endsWith(TEST_SUFFIX)))
+    const sources = policies.filter((file) => !file.endsWith(TEST_SUFFIX))
+    const packages = await this.packagesOf(sources)
+    const showing = await this.packagesShowing(sources)
     const registry = await this.readRequired(tree.registryPath)
     const enrichment = await this.readOptional(tree.enrichmentPath)
     const data = await this.readOptional(tree.dataPath)
@@ -56,14 +60,23 @@ export class Compiler {
     const buildProblems = await this.opaProblems(async () => {
       bundle = await this.opa.build(
         tree.policiesDir,
-        [...packages].map((name) => `${name.replaceAll('.', '/')}/allow`),
+        [
+          ...[...packages].map((name) => `${name.replaceAll('.', '/')}/allow`),
+          ...[...showing].map((name) => `${name.replaceAll('.', '/')}/show`),
+        ],
       )
     })
     if (bundle === undefined) {
       throw new CompileError(buildProblems)
     }
 
-    return new Distribution.PolicySet(tree.version, bundle, registry, enrichment, data)
+    return new Distribution.PolicySet(
+      tree.version,
+      bundle,
+      registry,
+      enrichment,
+      data,
+    )
   }
 
   /** What opa reported as wrong while doing `step`, if anything. */
@@ -86,7 +99,11 @@ export class Compiler {
         }
       }
     } catch (error) {
-      throw new CompileError([`no policies directory: ${error instanceof Error ? error.message : error}`])
+      throw new CompileError([
+        `no policies directory: ${
+          error instanceof Error ? error.message : error
+        }`,
+      ])
     }
     if (files.length === 0) {
       throw new CompileError(['no .rego files in policies/'])
@@ -94,11 +111,32 @@ export class Compiler {
     return files.sort()
   }
 
+  /**
+   * The packages declaring a `show` rule. opa refuses an entrypoint naming no
+   * rule, so only these get one; a rule is spotted by its head at the start
+   * of a line (`show[…] := …`, `show := …`, `show contains …`).
+   */
+  private async packagesShowing(
+    files: readonly string[],
+  ): Promise<Set<string>> {
+    const showing = new Set<string>()
+    for (const file of files) {
+      const source = await Deno.readTextFile(file)
+      const declared = source.match(/^package\s+([\w.]+)/m)?.[1]
+      if (declared !== undefined && /^show\b/m.test(source)) {
+        showing.add(declared)
+      }
+    }
+    return showing
+  }
+
   /** The package each policy file declares — the policy's name. */
   private async packagesOf(files: readonly string[]): Promise<Set<string>> {
     const packages = new Set<string>()
     for (const file of files) {
-      const declared = (await Deno.readTextFile(file)).match(/^package\s+([\w.]+)/m)?.[1]
+      const declared = (await Deno.readTextFile(file)).match(
+        /^package\s+([\w.]+)/m,
+      )?.[1]
       if (declared === undefined) {
         throw new CompileError([`${basename(file)} declares no package`])
       }
@@ -107,17 +145,24 @@ export class Compiler {
     return packages
   }
 
-  private registryProblems(registry: string, packages: ReadonlySet<string>): string[] {
+  private registryProblems(
+    registry: string,
+    packages: ReadonlySet<string>,
+  ): string[] {
     try {
       const associations = new Policy.Registries.Associations().parse(registry)
       return [...associations]
         .flatMap(([action, governing]) =>
           governing
             .filter((policy) => !packages.has(policy.toString()))
-            .map((policy) => `policies.yaml: ${action} is governed by ${policy}, which no policy file declares`)
+            .map((policy) =>
+              `policies.yaml: ${action} is governed by ${policy}, which no policy file declares`
+            )
         )
     } catch (error) {
-      return [`policies.yaml: ${error instanceof Error ? error.message : error}`]
+      return [
+        `policies.yaml: ${error instanceof Error ? error.message : error}`,
+      ]
     }
   }
 
@@ -127,7 +172,9 @@ export class Compiler {
       new Judge.Enrichers.Definitions().parse(enrichment)
       return []
     } catch (error) {
-      return [`enrichment.yaml: ${error instanceof Error ? error.message : error}`]
+      return [
+        `enrichment.yaml: ${error instanceof Error ? error.message : error}`,
+      ]
     }
   }
 

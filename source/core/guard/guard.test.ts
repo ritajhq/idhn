@@ -1,5 +1,6 @@
 import { assertEquals, assertRejects } from '@std/assert'
 import * as Access from '@idhn/access'
+import * as Disclosure from '@idhn/disclosure'
 import * as Judge from '@idhn/judge'
 import * as Policy from '@idhn/policy'
 import type { ActionResolver, ResolvedAction } from './action-resolver.ts'
@@ -8,6 +9,7 @@ import { Guard } from './guard.ts'
 import { Rejection, REJECTION_FOR_IDENTITY } from './rejection.ts'
 import type { RequestRecord } from './request-record.ts'
 import {
+  AnswerWithheldError,
   type ServiceProvider,
   ServiceUnreachableError,
 } from './service-provider.ts'
@@ -72,10 +74,15 @@ class FakePolicyEngine implements Policy.Engine {
 class RecordingServiceProvider implements ServiceProvider {
   calls: Array<'forward' | Rejection> = []
   forwardedAs: Access.Identity | undefined
+  disclosedAs: Disclosure.Disclosure | undefined
 
-  forward(identity: Access.Identity): Promise<void> {
+  forward(
+    identity: Access.Identity,
+    disclosure: Disclosure.Disclosure,
+  ): Promise<void> {
     this.calls.push('forward')
     this.forwardedAs = identity
+    this.disclosedAs = disclosure
     return Promise.resolve()
   }
 
@@ -436,4 +443,71 @@ Deno.test('Guard.execute: hands the judge its own judge timeout as the deadline'
   await guard.execute()
 
   assertEquals(judge.received?.ms, 750)
+})
+
+/** A judge whose one policy allows, saying how the answer may be shown. */
+function judgeShowing(disclosure: Disclosure.Disclosure): Judge.Behavior {
+  const policy = new Policy.Identifier('policy.a')
+  return new Judge.Local(
+    new FakePolicyRepository([policy]),
+    {
+      evaluate: (governing) =>
+        Promise.resolve(
+          new Policy.Result(governing, Policy.Verdict.Allow, disclosure),
+        ),
+    },
+    new Judge.DenyOverridesStrategy(new Judge.Decision(false)),
+    new Judge.Enrichers.Passthrough(),
+  )
+}
+
+Deno.test("Guard.execute: forwards with the policies' disclosure over the manifest's defaults", async () => {
+  const serviceProvider = new RecordingServiceProvider()
+  const guard = new Guard(
+    judgeShowing(
+      Disclosure.Disclosure.parse({
+        '/email': { kind: 'partial', form: 'email' },
+      }, 'show'),
+    ),
+    new FakeActionResolver({
+      ...resolvedAction,
+      restrictions: Disclosure.Disclosure.parse({
+        '/email': 'covered',
+        '/name': 'covered',
+      }, 'restrict'),
+    }),
+    new FakeAuthenticator(Access.Identity.anonymous()),
+    serviceProvider,
+  )
+
+  await guard.execute()
+
+  assertEquals(serviceProvider.disclosedAs?.toJSON(), {
+    '/email': { kind: 'partial', form: 'email' },
+    '/name': 'covered',
+  })
+})
+
+Deno.test("Guard.execute: withholds an answer that can't be restricted, and records why", async () => {
+  const rejected: Rejection[] = []
+  const records: RequestRecord[] = []
+  const guard = new Guard(
+    judgeAlwaysReturning(Policy.Verdict.Allow).judge,
+    new FakeActionResolver(resolvedAction),
+    new FakeAuthenticator(Access.Identity.anonymous()),
+    {
+      forward: () => Promise.reject(new AnswerWithheldError('not JSON')),
+      reject: (rejection) => {
+        rejected.push(rejection)
+        return Promise.resolve()
+      },
+    },
+  )
+  guard.OnHandled.Do((record) => records.push(record))
+
+  await guard.execute()
+
+  assertEquals(rejected, [Rejection.Withheld])
+  assertEquals(records[0].rejection, Rejection.Withheld)
+  assertEquals(records[0].error, 'not JSON')
 })

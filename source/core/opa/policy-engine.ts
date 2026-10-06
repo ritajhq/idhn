@@ -1,3 +1,4 @@
+import * as Disclosure from '@idhn/disclosure'
 import { loadPolicy } from '@open-policy-agent/opa-wasm'
 import type * as Access from '@idhn/access'
 import * as Policy from '@idhn/policy'
@@ -14,6 +15,12 @@ import * as Policy from '@idhn/policy'
  * the verdict (e.g. `Policy.Identifier("invoice.approve")` selects the entrypoint
  * `invoice/approve/allow`, which must have been included via `-e` when the
  * bundle was built).
+ *
+ * A package may also have a `show` rule, compiled in as `<package>/show`:
+ * an object from a JSON Pointer into the answer to how that field may be
+ * shown to this caller (see `@idhn/disclosure`). Undefined, or not compiled
+ * in, it says nothing. One that isn't a valid disclosure fails the
+ * evaluation rather than letting the field through.
  *
  * Impure builtins like `http.send` are not wired up: evaluation must stay a
  * pure function of `(Policy.Identifier, Access.Context)`, with any external data already
@@ -55,7 +62,27 @@ export class PolicyEngine implements Policy.Engine {
       context.facts,
       entrypoint,
     ) as EvaluationResult[]
-    return new Policy.Result(policy, toVerdict(results))
+    return new Policy.Result(
+      policy,
+      toVerdict(results),
+      this.disclosureOf(policy, context),
+    )
+  }
+
+  private disclosureOf(
+    policy: Policy.Identifier,
+    context: Access.Context,
+  ): Disclosure.Disclosure {
+    const entrypoint = [...policy.segments, 'show'].join('/')
+    if (!Object.hasOwn(this.wasmPolicy.entrypoints, entrypoint)) {
+      return Disclosure.Disclosure.none
+    }
+    const results = this.wasmPolicy.evaluate(
+      context.facts,
+      entrypoint,
+    ) as EvaluationResult[]
+    if (results.length === 0) return Disclosure.Disclosure.none
+    return Disclosure.Disclosure.parse(results[0].result, `${policy} show`)
   }
 }
 

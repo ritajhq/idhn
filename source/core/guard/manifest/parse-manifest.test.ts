@@ -367,3 +367,48 @@ Deno.test('parseManifest: rejects a session-cookie timeout_ms that is not a posi
     'timeout_ms must be a positive number',
   )
 })
+
+Deno.test('parseManifest: reads the fields of an answer to restrict, each covered unless it says how else', () => {
+  const manifest = parseManifest({
+    id: 'directory',
+    actions: [{
+      name: 'members.list',
+      match: { method: 'GET', path: '/members' },
+      restrict: [
+        { field: '/members/*/email', show: { kind: 'partial', form: 'email' } },
+        { field: '/members/*/phone' },
+      ],
+    }],
+  })
+  assertEquals(manifest.actions[0].restrict?.toJSON(), {
+    '/members/*/email': { kind: 'partial', form: 'email' },
+    '/members/*/phone': 'covered',
+  })
+})
+
+Deno.test('parseManifest: refuses a restriction it cannot read, naming where', () => {
+  const restricting = (restrict: unknown) => () =>
+    parseManifest({
+      id: 'directory',
+      actions: [{
+        name: 'members.list',
+        match: { method: 'GET', path: '/members' },
+        restrict,
+      }],
+    })
+  assertThrows(
+    restricting([{ field: 'members' }]),
+    ManifestParseError,
+    'manifest.actions[0].restrict[0].field',
+  )
+  assertThrows(
+    restricting([{ field: '/members', show: 'blurred' }]),
+    ManifestParseError,
+    'manifest.actions[0].restrict[0].show',
+  )
+  assertThrows(
+    restricting({ field: '/members' }),
+    ManifestParseError,
+    'manifest.actions[0].restrict',
+  )
+})

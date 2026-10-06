@@ -49,6 +49,11 @@ export class RequestRecording {
     this.error = error.message
   }
 
+  /** The service's answer could not be restricted: the request is about to be answered as withheld. */
+  withheld(error: Error): void {
+    this.error = error.message
+  }
+
   failed(error: unknown): void {
     this.outcome = 'failed'
     this.error = error instanceof Error ? error.message : String(error)

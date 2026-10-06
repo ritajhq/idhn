@@ -1,3 +1,5 @@
+import type * as Disclosure from '@idhn/disclosure'
+
 /** A single header match criterion: presence-only, or presence with an exact value. */
 export interface HeaderCriterion {
   name: string
@@ -36,11 +38,16 @@ export interface ExtractEntry {
   optional?: boolean
 }
 
-/** One action's matching rule and the context facts to extract when it matches. */
+/**
+ * One action's matching rule, the context facts to extract when it matches,
+ * and the fields of its answer to restrict: each one's JSON Pointer, and how
+ * it is shown when no policy says otherwise (`covered` unless declared).
+ */
 export interface HttpManifestAction {
   name: string
   match: Match
   extract?: ExtractEntry[]
+  restrict?: Disclosure.Disclosure
 }
 
 /** The authentication of a service that authenticates no one: every request is anonymous. The default when a manifest declares none. */

@@ -177,6 +177,74 @@ This happens in every enforcement mode (`CallerHeaders`,
 `source/core/guard/http/caller-headers.ts`). The service can trust these
 headers only while it can't be reached except through its guard.
 
+### What the caller may see: restricted fields
+
+Some answers hold data that not every caller may see in full: an email, a phone
+number, a full name. A manifest action lists those fields under `restrict`, and
+the guard rewrites the service's JSON answer before relaying it, so the service
+returns the same answer to everyone and never decides who sees what.
+
+```yaml
+actions:
+  - name: members.list
+    match: { method: GET, path: /members }
+    restrict:
+      - field: /members/*/email # a JSON Pointer; `*` is every item of a list
+      - field: /members/*/phone
+        show: { kind: partial, keep: last, count: 4 }
+```
+
+Each field is shown in one of four ways, from least to most withheld:
+
+| Presentation  | Written as                                                        | `ada@example.com`, `Ada Lovelace`        |
+| ------------- | ----------------------------------------------------------------- | ---------------------------------------- |
+| `visible`     | `visible`                                                         | unchanged                                |
+| `partial`     | `{ kind: partial, keep: first \| last, count: N }`                | `••••••.com` (last 4)                    |
+|               | `{ kind: partial, form: email }`                                  | `••••••@example.com`                     |
+| `replacement` | `{ kind: replacement, using: initials \| domain }`                | `A. L.`, `example.com`                   |
+|               | `{ kind: replacement, using: constant, value: "…" }`              | the value                                |
+| `covered`     | `covered`                                                         | `••••••`                                 |
+
+The mask never reveals how long the value was. A presentation that can't apply
+to a value (the initials of a number, the last characters of an object) covers
+it, and so does keeping as many characters as the value has.
+
+**Who decides.** The manifest's `show` is only the default: `covered` when it
+is left out. A policy may say how each field is shown to *this* caller with a
+`show` rule, an object from the field's JSON Pointer to a presentation, beside
+its `allow` rule:
+
+```rego
+package member.directory
+
+allow if input.auth.status == "authenticated"
+
+show["/members/*/email"] := {"kind": "partial", "form": "email"}
+
+show["/members/*/name"] := "visible" if input.auth.claims.role == "admin"
+```
+
+When several policies govern the action, the one that withholds most wins for
+each field, as a deny overrides an allow. What they say replaces the manifest's
+default for that field; a field no policy mentions keeps its default, so a
+restricted field never shows because a policy forgot it. The policy builder
+compiles a package's `show` rule as an entrypoint whenever the package declares
+one (`<package>/show`, beside `<package>/allow`). The judge-server returns the
+result as `disclosure` next to `allowed`. The `authn-only` and `permissive`
+levels ask no policy, so the manifest's defaults apply as they are.
+
+**What gets rewritten.** Only an allowed request's answer, and only when its
+action restricts something. The answer is then read whole and must be JSON: its
+fields are rewritten, and the `content-length`, `content-encoding` and `etag`
+that described the original are dropped. An empty answer passes as it is. An
+answer that isn't JSON is **withheld**: the guard answers `502` (`rejection:
+withheld` in the request log) rather than relay it with restricted fields in
+it. Fields an answer doesn't have are left alone.
+
+The same applies to [horizon](handoff-horizon-protocol.md) messages over HTTP,
+whose answers are JSON: a query's answer sits at `/data/query.result/value`,
+for example `/data/query.result/value/users/*/email`.
+
 ## Where a policy's facts come from
 
 `Policy.Engine.evaluate` is a pure function of `(policy, context)`. It makes no
@@ -264,6 +332,9 @@ again may help:
   response from the service is not this case: it is relayed as the service's own
   answer. A denied request is answered `401`/`403` without ever reaching the
   service, so it never reveals whether the service is up.
+  It is also the answer, recorded as `rejection: withheld`, when the service
+  did answer but its answer has restricted fields and isn't JSON, so they
+  can't be rewritten (see [restricted fields](#what-the-caller-may-see-restricted-fields)).
 - **`500`** for everything else, which is a fault to fix rather than wait out: a
   policy missing from the bundle, a lookup answering `404` or `500` or with a
   malformed body, a missing placeholder fact, a bug.

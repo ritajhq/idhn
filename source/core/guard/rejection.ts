@@ -16,6 +16,8 @@ export enum Rejection {
   Unavailable = 'unavailable',
   /** The request was allowed, but the protected service could not be reached to forward it to. */
   Unreachable = 'unreachable',
+  /** The service answered, but in a form its restricted fields could not be found in, so its answer is not relayed. */
+  Withheld = 'withheld',
 }
 
 /** The rejection for a denied request, by what authentication reported about its caller, for a scheme a caller can authenticate with. */

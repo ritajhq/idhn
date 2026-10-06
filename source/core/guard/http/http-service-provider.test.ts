@@ -1,8 +1,12 @@
+import * as Disclosure from '@idhn/disclosure'
 import { assertEquals, assertRejects } from '@std/assert'
 import * as Access from '@idhn/access'
 import { HttpServiceProvider } from './http-service-provider.ts'
 import { Rejection } from '../rejection.ts'
-import { ServiceUnreachableError } from '../service-provider.ts'
+import {
+  AnswerWithheldError,
+  ServiceUnreachableError,
+} from '../service-provider.ts'
 import { Bare, Served } from './reject-responses/index.ts'
 
 async function withUpstream(
@@ -45,7 +49,10 @@ Deno.test('HttpServiceProvider.forward: proxies the request to the upstream and 
         new Bare(),
       )
 
-      await provider.forward(Access.Identity.anonymous())
+      await provider.forward(
+        Access.Identity.anonymous(),
+        Disclosure.Disclosure.none,
+      )
       const response = await promise
 
       assertEquals(response.status, 200)
@@ -70,7 +77,10 @@ Deno.test('HttpServiceProvider.forward: relays the upstream body', async () => {
         new Bare(),
       )
 
-      await provider.forward(Access.Identity.anonymous())
+      await provider.forward(
+        Access.Identity.anonymous(),
+        Disclosure.Disclosure.none,
+      )
       const response = await promise
 
       assertEquals(response.status, 201)
@@ -96,7 +106,10 @@ Deno.test('HttpServiceProvider.forward: does not follow upstream redirects', asy
         new Bare(),
       )
 
-      await provider.forward(Access.Identity.anonymous())
+      await provider.forward(
+        Access.Identity.anonymous(),
+        Disclosure.Disclosure.none,
+      )
       const response = await promise
 
       assertEquals(response.status, 302)
@@ -211,7 +224,8 @@ Deno.test('HttpServiceProvider.forward: throws ServiceUnreachableError when the 
   )
 
   await assertRejects(
-    () => provider.forward(Access.Identity.anonymous()),
+    () =>
+      provider.forward(Access.Identity.anonymous(), Disclosure.Disclosure.none),
     ServiceUnreachableError,
     'could not be reached',
   )
@@ -229,7 +243,10 @@ Deno.test("HttpServiceProvider.forward: relays an upstream error response as the
         new Bare(),
       )
 
-      await provider.forward(Access.Identity.anonymous())
+      await provider.forward(
+        Access.Identity.anonymous(),
+        Disclosure.Disclosure.none,
+      )
       const response = await promise
 
       assertEquals(response.status, 500)
@@ -268,7 +285,10 @@ Deno.test('HttpServiceProvider.forward: tells the upstream who an authenticated 
         new Bare(),
       )
 
-      await provider.forward(Access.Identity.authenticated('alice', 'portal', claims))
+      await provider.forward(
+        Access.Identity.authenticated('alice', 'portal', claims),
+        Disclosure.Disclosure.none,
+      )
       await promise
     },
   )
@@ -302,7 +322,10 @@ Deno.test('HttpServiceProvider.forward: drops caller headers the caller sent its
         new Bare(),
       )
 
-      await provider.forward(Access.Identity.authenticated('alice', 'portal'))
+      await provider.forward(
+        Access.Identity.authenticated('alice', 'portal'),
+        Disclosure.Disclosure.none,
+      )
       await promise
     },
   )
@@ -332,11 +355,96 @@ Deno.test('HttpServiceProvider.forward: tells the upstream nothing about a calle
         new Bare(),
       )
 
-      await provider.forward(Access.Identity.anonymous())
+      await provider.forward(
+        Access.Identity.anonymous(),
+        Disclosure.Disclosure.none,
+      )
       await promise
     },
   )
 
-  const idhn = [...received!.keys()].filter((name) => name.startsWith('x-idhn-'))
+  const idhn = [...received!.keys()].filter((name) =>
+    name.startsWith('x-idhn-')
+  )
   assertEquals(idhn, [])
+})
+
+async function forwardedThrough(
+  upstream: URL,
+  disclosure: Disclosure.Disclosure,
+): Promise<Response> {
+  const { promise, resolve } = Promise.withResolvers<Response>()
+  const provider = new HttpServiceProvider(
+    new Request('http://guard.local/members'),
+    upstream,
+    resolve,
+    new Bare(),
+  )
+  await provider.forward(Access.Identity.anonymous(), disclosure)
+  return await promise
+}
+
+const directory = Disclosure.Disclosure.parse({
+  '/members/*/email': { kind: 'partial', form: 'email' },
+  '/members/*/name': 'covered',
+}, 'restrict')
+
+Deno.test('HttpServiceProvider.forward: relays a JSON answer with its restricted fields shown as the disclosure says', async () => {
+  await withUpstream(
+    () =>
+      Response.json(
+        { members: [{ id: 'u-1', email: 'ada@example.com', name: 'Ada' }] },
+        { status: 200, headers: { 'x-service': 'directory', etag: '"v1"' } },
+      ),
+    async (upstream) => {
+      const response = await forwardedThrough(upstream, directory)
+      assertEquals(response.status, 200)
+      assertEquals(response.headers.get('x-service'), 'directory')
+      // The body changed: what described the original no longer holds.
+      assertEquals(response.headers.get('etag'), null)
+      assertEquals(await response.json(), {
+        members: [{
+          id: 'u-1',
+          email: `${Disclosure.MASK}@example.com`,
+          name: Disclosure.MASK,
+        }],
+      })
+    },
+  )
+})
+
+Deno.test('HttpServiceProvider.forward: an answer it cannot restrict is withheld, not relayed whole', async () => {
+  await withUpstream(
+    () =>
+      new Response('ada@example.com,Ada', {
+        headers: { 'content-type': 'text/csv' },
+      }),
+    async (upstream) => {
+      await assertRejects(
+        () => forwardedThrough(upstream, directory),
+        AnswerWithheldError,
+      )
+    },
+  )
+})
+
+Deno.test('HttpServiceProvider.forward: an empty answer has nothing to restrict, and nothing restricted relays as it was', async () => {
+  await withUpstream(
+    () => new Response(null, { status: 204 }),
+    async (upstream) => {
+      const response = await forwardedThrough(upstream, directory)
+      assertEquals(response.status, 204)
+      assertEquals(await response.text(), '')
+    },
+  )
+  await withUpstream(
+    () => new Response('plain text', { status: 200 }),
+    async (upstream) => {
+      const response = await forwardedThrough(
+        upstream,
+        Disclosure.Disclosure.none,
+      )
+      assertEquals(await response.text(), 'plain text')
+    },
+  )
 })

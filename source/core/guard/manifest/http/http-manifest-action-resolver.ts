@@ -42,7 +42,11 @@ export class HttpManifestActionResolver implements ActionResolver {
       const action = new Access.Action(
         `${this.manifest.id}.${manifestAction.name}`,
       )
-      return { action, context: new Access.Context(facts) }
+      return {
+        action,
+        context: new Access.Context(facts),
+        restrictions: manifestAction.restrict,
+      }
     }
 
     return null

@@ -1,5 +1,6 @@
 import { Delegate, type Emitter } from '@duesabati/evento'
 import * as Access from '@idhn/access'
+import * as Disclosure from '@idhn/disclosure'
 import * as Judge from '@idhn/judge'
 import type { ActionResolver } from './action-resolver.ts'
 import type { Authenticator } from './authenticator.ts'
@@ -7,6 +8,7 @@ import { Rejection } from './rejection.ts'
 import type { RequestRecord } from './request-record.ts'
 import { RequestRecording } from './request-recording.ts'
 import {
+  AnswerWithheldError,
   type ServiceProvider,
   ServiceUnreachableError,
 } from './service-provider.ts'
@@ -24,8 +26,13 @@ import {
  * A judge that is temporarily unavailable is a rejection, not a failure: the
  * request is denied (fail closed) as unavailable, so its caller knows to try
  * again. So is a protected service that can't be reached to forward an
- * allowed request to: it is answered as unreachable. Any other failure
- * propagates.
+ * allowed request to: it is answered as unreachable. So, last, is an answer
+ * whose restricted fields can't be found in it: it is withheld rather than
+ * relayed whole. Any other failure propagates.
+ *
+ * An allowed request's answer is relayed with its restricted fields shown
+ * as the policies said — and where they said nothing, as the service
+ * declared by default (`ResolvedAction.restrictions`).
  *
  * The guard waits at most `judgeTimeoutMs` for a judgement. That wait is the
  * deadline the judge is handed, and every hop behind it answers within it, so
@@ -88,7 +95,10 @@ export class Guard {
     recording.judged(decision)
 
     if (decision.allowed) {
-      return await this.forward(identity, recording)
+      const disclosure = decision.disclosure.over(
+        resolved.restrictions ?? Disclosure.Disclosure.none,
+      )
+      return await this.forward(identity, disclosure, recording)
     }
 
     return await this.reject(
@@ -99,17 +109,22 @@ export class Guard {
 
   private async forward(
     identity: Access.Identity,
+    disclosure: Disclosure.Disclosure,
     recording: RequestRecording,
   ): Promise<void> {
     try {
-      await this.serviceProvider.forward(identity)
+      await this.serviceProvider.forward(identity, disclosure)
       recording.forwarded()
     } catch (error) {
-      if (!(error instanceof ServiceUnreachableError)) {
-        throw error
+      if (error instanceof ServiceUnreachableError) {
+        recording.unreachable(error)
+        return await this.reject(Rejection.Unreachable, recording)
       }
-      recording.unreachable(error)
-      await this.reject(Rejection.Unreachable, recording)
+      if (error instanceof AnswerWithheldError) {
+        recording.withheld(error)
+        return await this.reject(Rejection.Withheld, recording)
+      }
+      throw error
     }
   }
 

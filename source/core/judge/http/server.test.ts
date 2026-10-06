@@ -1,4 +1,5 @@
 import { assertEquals, assertRejects } from '@std/assert'
+import * as Disclosure from '@idhn/disclosure'
 import type * as Access from '@idhn/access'
 import { Decision } from '../decision.ts'
 import type { Behavior } from '../behavior.ts'
@@ -156,4 +157,20 @@ Deno.test('Server.handle: leaves the deadline to the judge when the caller says 
 
     assertEquals(judge.received?.ms, Number.POSITIVE_INFINITY)
   }
+})
+
+Deno.test('Server.handle: sends how the answer may be shown, when a policy said', async () => {
+  const shown = Disclosure.Disclosure.parse({ '/email': 'covered' }, 'show')
+  const judge = new FakeJudge(new Decision(true, [], 'd-3', shown))
+  const response = await new Server(judge).handle(
+    new Request('http://judge.test/decide', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'directory.list', context: {} }),
+    }),
+  )
+  assertEquals(await response.json(), {
+    allowed: true,
+    decisionId: 'd-3',
+    disclosure: { '/email': 'covered' },
+  })
 })

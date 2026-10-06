@@ -3,6 +3,9 @@ import { CompileError, Compiler } from './compiler.ts'
 import { Opa } from './opa.ts'
 import { SourceTree } from './source-tree.ts'
 import { VALID_TREE, writeTree } from './test-fixtures.ts'
+import * as Access from '@idhn/access'
+import * as OPA from '@idhn/opa'
+import * as Policy from '@idhn/policy'
 
 async function treeOf(files: Record<string, string>): Promise<SourceTree> {
   const dir = await Deno.makeTempDir()
@@ -11,7 +14,6 @@ async function treeOf(files: Record<string, string>): Promise<SourceTree> {
 }
 
 const compiler = new Compiler(new Opa())
-
 
 Deno.test('Compiler.compile: turns valid sources into a policy set with a WASM bundle', async () => {
   const set = await compiler.compile(await treeOf(VALID_TREE))
@@ -31,11 +33,16 @@ Deno.test('Compiler.compile: refuses a registry naming a policy no file declares
 
   const error = await assertRejects(() => compiler.compile(tree), CompileError)
 
-  assertEquals(error.problems, ['policies.yaml: shop.browse is governed by shop.missing, which no policy file declares'])
+  assertEquals(error.problems, [
+    'policies.yaml: shop.browse is governed by shop.missing, which no policy file declares',
+  ])
 })
 
-Deno.test('Compiler.compile: refuses Rego that does not compile, with opa\'s report', async () => {
-  const tree = await treeOf({ ...VALID_TREE, 'policies/public.rego': 'package shop.public\n\nallow if {\n' })
+Deno.test("Compiler.compile: refuses Rego that does not compile, with opa's report", async () => {
+  const tree = await treeOf({
+    ...VALID_TREE,
+    'policies/public.rego': 'package shop.public\n\nallow if {\n',
+  })
 
   const error = await assertRejects(() => compiler.compile(tree), CompileError)
 
@@ -43,7 +50,10 @@ Deno.test('Compiler.compile: refuses Rego that does not compile, with opa\'s rep
 })
 
 Deno.test('Compiler.compile: refuses policies whose tests fail', async () => {
-  const tree = await treeOf({ ...VALID_TREE, 'policies/public.rego': 'package shop.public\n\nallow := false\n' })
+  const tree = await treeOf({
+    ...VALID_TREE,
+    'policies/public.rego': 'package shop.public\n\nallow := false\n',
+  })
 
   const error = await assertRejects(() => compiler.compile(tree), CompileError)
 
@@ -73,4 +83,31 @@ Deno.test('Compiler.compile: reports a registry problem and a Rego error in the 
 
   assertEquals(error.problems.length, 2)
   assert(error.problems[1].startsWith('opa check failed'), error.problems[1])
+})
+
+Deno.test("Compiler.compile: compiles a package's `show` rule too, so judges can say how the answer may be shown", async () => {
+  const set = await compiler.compile(
+    await treeOf({
+      ...VALID_TREE,
+      'policies/directory.rego':
+        'package shop.directory\n\nallow := true\n\nshow["/members/*/email"] := {"kind": "partial", "form": "email"}\n',
+      'policies.yaml':
+        'associations:\n  shop.browse: [shop.public]\n  shop.list: [shop.directory]\n',
+    }),
+  )
+
+  const engine = await OPA.PolicyEngine.load(set.bundle)
+  const directory = await engine.evaluate(
+    new Policy.Identifier('shop.directory'),
+    new Access.Context({}),
+  )
+  assertEquals(directory.disclosure.toJSON(), {
+    '/members/*/email': { kind: 'partial', form: 'email' },
+  })
+  // A package without one still compiles, and says nothing.
+  const open = await engine.evaluate(
+    new Policy.Identifier('shop.public'),
+    new Access.Context({}),
+  )
+  assertEquals(open.disclosure.isEmpty, true)
 })

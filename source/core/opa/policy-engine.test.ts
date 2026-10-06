@@ -106,3 +106,48 @@ Deno.test('OPA.PolicyEngine.load: without data, a policy reading `data` denies r
 
   assertEquals(result.verdict, Policy.Verdict.Deny)
 })
+
+Deno.test("OPA.PolicyEngine.evaluate: a policy's `show` rule says how the answer's fields may be shown to this caller", async () => {
+  const engine = await loadFixtureEngine()
+  const directory = new Policy.Identifier('member.directory')
+  const member = await engine.evaluate(
+    directory,
+    new Access.Context({
+      auth: {
+        status: 'authenticated',
+        subject: 'u-1',
+        claims: { role: 'member' },
+      },
+    }),
+  )
+  assertEquals(member.verdict, Policy.Verdict.Allow)
+  assertEquals(member.disclosure.toJSON(), {
+    '/members/*/email': { kind: 'partial', form: 'email' },
+    '/members/*/name': { kind: 'replacement', using: 'initials' },
+  })
+
+  const admin = await engine.evaluate(
+    directory,
+    new Access.Context({
+      auth: {
+        status: 'authenticated',
+        subject: 'u-2',
+        claims: { role: 'admin' },
+      },
+    }),
+  )
+  assertEquals(admin.disclosure.toJSON()['/members/*/name'], 'visible')
+})
+
+Deno.test('OPA.PolicyEngine.evaluate: a policy without a `show` rule says nothing about the answer', async () => {
+  const engine = await loadFixtureEngine()
+  const result = await engine.evaluate(
+    new Policy.Identifier('invoice.approve'),
+    new Access.Context({
+      amount: 50,
+      approverId: 'manager-1',
+      requesterId: 'employee-1',
+    }),
+  )
+  assertEquals(result.disclosure.isEmpty, true)
+})

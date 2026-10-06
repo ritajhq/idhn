@@ -1,6 +1,8 @@
 import type * as Access from '@idhn/access'
+import type * as Disclosure from '@idhn/disclosure'
 import { Rejection } from '../rejection.ts'
 import {
+  AnswerWithheldError,
   type ServiceProvider,
   ServiceUnreachableError,
 } from '../service-provider.ts'
@@ -13,6 +15,7 @@ const REJECTION_STATUS: Readonly<Record<Rejection, number>> = {
   [Rejection.Unauthenticated]: 401,
   [Rejection.Unavailable]: 503,
   [Rejection.Unreachable]: 502,
+  [Rejection.Withheld]: 502,
 }
 
 /** How long a caller is told to wait before trying again after a `503`. */
@@ -24,7 +27,11 @@ const REJECTION_HEADERS: Readonly<Record<Rejection, HeadersInit>> = {
   [Rejection.Unauthenticated]: {},
   [Rejection.Unavailable]: { 'retry-after': String(RETRY_AFTER_SECONDS) },
   [Rejection.Unreachable]: {},
+  [Rejection.Withheld]: {},
 }
+
+/** Headers describing the body as the service sent it, which no longer hold once its restricted fields are rewritten. */
+const REWRITTEN_BODY_HEADERS = ['content-length', 'content-encoding', 'etag']
 
 /**
  * Carries out a `Guard`'s verdict over HTTP: `forward()` reverse-proxies the
@@ -33,7 +40,10 @@ const REJECTION_HEADERS: Readonly<Record<Rejection, HeadersInit>> = {
  * when a service configured no custom page) under the
  * status for the rejection: `403` forbidden, `401` unauthenticated, `503`
  * with `Retry-After` when the caller's identity or the judgement could not be
- * had for now, `502` when the protected service could not be reached. Neither method returns
+ * had for now, `502` when the protected service could not be reached or its
+ * answer had to be withheld. An answer with restricted fields is read whole
+ * and relayed as JSON with them rewritten; one that isn't JSON is withheld
+ * rather than relayed with them in it. Neither method returns
  * anything (per `ServiceProvider`'s contract) — instead, this class is
  * constructed with a `resolve` function (from `Promise.withResolvers()`)
  * that it calls with the eventual `Response`. This lets the HTTP handler
@@ -50,7 +60,10 @@ export class HttpServiceProvider implements ServiceProvider {
     private readonly rejectResponse: RejectResponse,
   ) {}
 
-  async forward(identity: Access.Identity): Promise<void> {
+  async forward(
+    identity: Access.Identity,
+    disclosure: Disclosure.Disclosure,
+  ): Promise<void> {
     const target = new URL(this.request.url)
     target.protocol = this.upstream.protocol
     target.host = this.upstream.host
@@ -66,7 +79,40 @@ export class HttpServiceProvider implements ServiceProvider {
         { cause: error },
       )
     })
-    this.resolve(response)
+    this.resolve(
+      disclosure.isEmpty ? response : await this.restrict(response, disclosure),
+    )
+  }
+
+  /** `answer`, its restricted fields shown only as `disclosure` says. */
+  private async restrict(
+    answer: Response,
+    disclosure: Disclosure.Disclosure,
+  ): Promise<Response> {
+    const text = await answer.text()
+    const headers = new Headers(answer.headers)
+    for (const name of REWRITTEN_BODY_HEADERS) headers.delete(name)
+    const init = {
+      status: answer.status,
+      statusText: answer.statusText,
+      headers,
+    }
+    // Nothing in it to restrict, and some statuses (204, 304) may carry no body.
+    if (text === '') return new Response(null, init)
+
+    let document: unknown
+    try {
+      document = JSON.parse(text)
+    } catch (error) {
+      throw new AnswerWithheldError(
+        `The ${answer.status} answer of ${this.upstream.origin} has restricted fields but is not JSON`,
+        { cause: error },
+      )
+    }
+    if (!headers.has('content-type')) {
+      headers.set('content-type', 'application/json')
+    }
+    return new Response(JSON.stringify(disclosure.apply(document)), init)
   }
 
   // deno-lint-ignore require-await

@@ -1,3 +1,4 @@
+import * as Disclosure from '@idhn/disclosure'
 import {
   expectArray,
   expectBoolean,
@@ -38,7 +39,35 @@ function parseAction(raw: unknown, path: string): HttpManifestAction {
     : expectArray(obj.extract, `${path}.extract`).map((entry, index) =>
       parseExtractEntry(entry, `${path}.extract[${index}]`)
     )
-  return { name, match, extract }
+  const restrict = obj.restrict === undefined
+    ? undefined
+    : parseRestrict(obj.restrict, `${path}.restrict`)
+  return { name, match, extract, restrict }
+}
+
+/** `[{ field: <JSON Pointer>, show?: <presentation> }]`: each field covered unless `show` says how else. */
+function parseRestrict(raw: unknown, path: string): Disclosure.Disclosure {
+  const entries = expectArray(raw, path).map((entry, index) => {
+    const at = `${path}[${index}]`
+    const obj = expectObject(entry, at)
+    try {
+      return [
+        Disclosure.Field.parse(obj.field, `${at}.field`),
+        obj.show === undefined
+          ? Disclosure.Presentation.covered
+          : Disclosure.Presentation.parse(obj.show, `${at}.show`),
+      ] as const
+    } catch (error) {
+      if (
+        error instanceof Disclosure.InvalidFieldError ||
+        error instanceof Disclosure.InvalidPresentationError
+      ) {
+        throw new ManifestParseError(error.message)
+      }
+      throw error
+    }
+  })
+  return Disclosure.Disclosure.of(entries)
 }
 
 function parseMatch(raw: unknown, path: string): Match {

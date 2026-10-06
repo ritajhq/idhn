@@ -20,6 +20,8 @@ opa build -t wasm \
   -e report/view/allow \
   -e place/manage/allow \
   -e catalog/browse/allow \
+  -e member/directory/allow \
+  -e member/directory/show \
   ./*.rego \
   -o "$tmp/bundle.tar.gz"
 tar xzf "$tmp/bundle.tar.gz" -C "$tmp"

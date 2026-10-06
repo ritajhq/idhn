@@ -1,9 +1,16 @@
 import type * as Access from '@idhn/access'
+import type * as Disclosure from '@idhn/disclosure'
 
 /** What an `ActionResolver` resolves a request to: the action being attempted, and its context. */
 export interface ResolvedAction {
   action: Access.Action
   context: Access.Context
+  /**
+   * The answer's restricted fields, each shown as the service declared by
+   * default — what the caller sees unless a policy says otherwise. None when
+   * nothing is restricted.
+   */
+  restrictions?: Disclosure.Disclosure
 }
 
 /**

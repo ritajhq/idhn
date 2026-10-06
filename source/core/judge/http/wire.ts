@@ -1,3 +1,5 @@
+import type * as Disclosure from '@idhn/disclosure'
+
 /**
  * How many milliseconds the caller of `POST /decide` will still wait for its
  * answer, measured when the request is sent. Relative rather than a point in
@@ -20,4 +22,6 @@ export interface DecideResponseBody {
   allowed: boolean
   /** Identifies the judgement, so the caller's records can be matched against the judge's. */
   decisionId?: string
+  /** How much of the answer's restricted fields the caller may see, when any policy said: `{ "<pointer>": <presentation> }`. */
+  disclosure?: Record<string, Disclosure.PresentationSpec>
 }

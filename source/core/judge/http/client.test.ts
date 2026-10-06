@@ -146,3 +146,20 @@ Deno.test('Client.decide: tells the server how long it will still wait', async (
     `sent ${sent}`,
   )
 })
+
+Deno.test('Client.decide: carries how the answer may be shown, as the server judged it', async () => {
+  const disclosure = {
+    '/members/*/email': { kind: 'partial', form: 'email' },
+  } as const
+  await withServer(
+    () => Response.json({ allowed: true, decisionId: 'd-2', disclosure }),
+    async (server) => {
+      const decision = await new Client(server).decide(
+        new Access.Action('directory.list'),
+        new Access.Context({}),
+        Deadline.in(2000),
+      )
+      assertEquals(decision.disclosure.toJSON(), disclosure)
+    },
+  )
+})

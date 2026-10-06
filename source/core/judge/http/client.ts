@@ -1,3 +1,4 @@
+import * as Disclosure from '@idhn/disclosure'
 import type * as Access from '@idhn/access'
 import type { Deadline } from '../deadline.ts'
 import { Decision } from '../decision.ts'
@@ -57,7 +58,12 @@ export class Client implements Behavior {
     }
 
     const responseBody: DecideResponseBody = await response.json()
-    return new Decision(responseBody.allowed, [], responseBody.decisionId)
+    return new Decision(
+      responseBody.allowed,
+      [],
+      responseBody.decisionId,
+      Disclosure.Disclosure.parse(responseBody.disclosure, 'disclosure'),
+    )
   }
 
   private async post(

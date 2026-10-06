@@ -81,6 +81,9 @@ export class Server {
     const body: DecideResponseBody = {
       allowed: decision.allowed,
       decisionId: decision.id,
+      ...(decision.disclosure.isEmpty
+        ? {}
+        : { disclosure: decision.disclosure.toJSON() }),
     }
     return Response.json(body)
   }

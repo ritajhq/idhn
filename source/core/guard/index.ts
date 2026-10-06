@@ -1,6 +1,7 @@
 export type { ActionResolver, ResolvedAction } from './action-resolver.ts'
 export type { Authenticator } from './authenticator.ts'
 export {
+  AnswerWithheldError,
   type ServiceProvider,
   ServiceUnreachableError,
 } from './service-provider.ts'
