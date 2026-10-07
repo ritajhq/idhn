@@ -1,5 +1,6 @@
 import { assertEquals, assertThrows } from '@std/assert'
 import { ManifestParseError, parseManifest } from './parse-manifest.ts'
+import { writeManifest } from './write-manifest.ts'
 
 const validRaw = {
   id: 'billing_service',
@@ -410,5 +411,85 @@ Deno.test('parseManifest: refuses a restriction it cannot read, naming where', (
     restricting({ field: '/members' }),
     ManifestParseError,
     'manifest.actions[0].restrict',
+  )
+})
+
+Deno.test('parseManifest: refuses an action under the reserved idhn namespace', () => {
+  for (const name of ['idhn', 'idhn.manifest.read', 'idhn.anything']) {
+    assertThrows(
+      () =>
+        parseManifest({
+          id: 'shop',
+          actions: [{ name, match: { method: 'GET', path: '/' } }],
+        }),
+      ManifestParseError,
+      'reserved',
+    )
+  }
+  // Only the whole first segment is reserved.
+  parseManifest({
+    id: 'shop',
+    actions: [{ name: 'idhnish.read', match: { method: 'GET', path: '/' } }],
+  })
+})
+
+Deno.test('writeManifest: writes a manifest back in its own syntax, every default spelled out', () => {
+  const manifest = parseManifest({
+    id: 'directory',
+    authentication: {
+      scheme: 'session-cookie',
+      session_url: 'http://auth.test/api/auth/get-session',
+    },
+    actions: [{
+      name: 'members.list',
+      match: { method: 'GET', path: '/members', header: ['x-api'] },
+      extract: [{
+        from: { property: 'query', using: 'q' },
+        as: 'q',
+        optional: true,
+      }],
+      restrict: [
+        { field: '/members/*/email' },
+        {
+          field: '/members/*/phone',
+          show: { kind: 'partial', keep: 'last', count: 4 },
+        },
+      ],
+    }],
+  })
+  const written = writeManifest(manifest)
+  assertEquals(written, {
+    id: 'directory',
+    protocol: 'http',
+    authentication: {
+      scheme: 'session-cookie',
+      session_url: 'http://auth.test/api/auth/get-session',
+      cookie: 'better-auth.session_token',
+      issuer: 'http://auth.test',
+      claims: ['username', 'email', 'name', 'emailVerified'],
+      ttl_seconds: 5,
+      timeout_ms: 2000,
+    },
+    actions: [{
+      name: 'members.list',
+      match: { method: 'GET', path: '/members', header: ['x-api'] },
+      extract: [{
+        from: { property: 'query', using: 'q' },
+        as: 'q',
+        optional: true,
+      }],
+      restrict: [
+        { field: '/members/*/email', show: 'covered' },
+        {
+          field: '/members/*/phone',
+          show: { kind: 'partial', keep: 'last', count: 4 },
+        },
+      ],
+    }],
+  })
+  // What a reader parses from it is the manifest the guard holds.
+  assertEquals(
+    writeManifest(parseManifest(JSON.parse(JSON.stringify(written)))),
+    written,
   )
 })

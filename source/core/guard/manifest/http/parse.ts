@@ -19,6 +19,7 @@ import type {
   HttpManifestAction,
   Match,
 } from './schema.ts'
+import { isReserved, RESERVED_NAMESPACE } from '../reserved.ts'
 import { parseHttpAuthentication } from './parse-authentication.ts'
 
 const BODY_TYPES: readonly BodyType[] = ['json', 'form', 'text']
@@ -33,6 +34,11 @@ const FROM_PROPERTIES: readonly FromProperty[] = [
 function parseAction(raw: unknown, path: string): HttpManifestAction {
   const obj = expectObject(raw, path)
   const name = expectRegoSafeActionName(obj.name, `${path}.name`)
+  if (isReserved(name)) {
+    throw new ManifestParseError(
+      `${path}.name "${name}" is under "${RESERVED_NAMESPACE}.", which is reserved for the actions every guard answers itself`,
+    )
+  }
   const match = parseMatch(obj.match, `${path}.match`)
   const extract = obj.extract === undefined
     ? undefined

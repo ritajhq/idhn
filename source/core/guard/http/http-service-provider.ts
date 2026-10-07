@@ -1,6 +1,6 @@
 import type * as Access from '@idhn/access'
 import type * as Disclosure from '@idhn/disclosure'
-import { Rejection } from '../rejection.ts'
+import type { Rejection } from '../rejection.ts'
 import {
   AnswerWithheldError,
   type ServiceProvider,
@@ -8,27 +8,7 @@ import {
 } from '../service-provider.ts'
 import { CallerHeaders } from './caller-headers.ts'
 import type { RejectResponse } from './reject-responses/reject-response.ts'
-
-/** How each reason for rejecting a request is said in HTTP. */
-const REJECTION_STATUS: Readonly<Record<Rejection, number>> = {
-  [Rejection.Forbidden]: 403,
-  [Rejection.Unauthenticated]: 401,
-  [Rejection.Unavailable]: 503,
-  [Rejection.Unreachable]: 502,
-  [Rejection.Withheld]: 502,
-}
-
-/** How long a caller is told to wait before trying again after a `503`. */
-const RETRY_AFTER_SECONDS = 5
-
-/** Headers each reason for rejecting a request calls for: only unavailability says when to try again. */
-const REJECTION_HEADERS: Readonly<Record<Rejection, HeadersInit>> = {
-  [Rejection.Forbidden]: {},
-  [Rejection.Unauthenticated]: {},
-  [Rejection.Unavailable]: { 'retry-after': String(RETRY_AFTER_SECONDS) },
-  [Rejection.Unreachable]: {},
-  [Rejection.Withheld]: {},
-}
+import { RejectionAnswers } from './rejection-answers.ts'
 
 /** Headers describing the body as the service sent it, which no longer hold once its restricted fields are rewritten. */
 const REWRITTEN_BODY_HEADERS = ['content-length', 'content-encoding', 'etag']
@@ -37,11 +17,8 @@ const REWRITTEN_BODY_HEADERS = ['content-length', 'content-encoding', 'etag']
  * Carries out a `Guard`'s verdict over HTTP: `forward()` reverse-proxies the
  * request to `upstream`, telling it who the caller is (see `CallerHeaders`),
  * `reject()` answers with the injected `RejectResponse` (a bare empty body
- * when a service configured no custom page) under the
- * status for the rejection: `403` forbidden, `401` unauthenticated, `503`
- * with `Retry-After` when the caller's identity or the judgement could not be
- * had for now, `502` when the protected service could not be reached or its
- * answer had to be withheld. An answer with restricted fields is read whole
+ * when a service configured no custom page), as `RejectionAnswers` says
+ * each rejection in HTTP. An answer with restricted fields is read whole
  * and relayed as JSON with them rewritten; one that isn't JSON is withheld
  * rather than relayed with them in it. Neither method returns
  * anything (per `ServiceProvider`'s contract) — instead, this class is
@@ -117,11 +94,6 @@ export class HttpServiceProvider implements ServiceProvider {
 
   // deno-lint-ignore require-await
   async reject(rejection: Rejection): Promise<void> {
-    this.resolve(
-      this.rejectResponse.toResponse(
-        REJECTION_STATUS[rejection],
-        REJECTION_HEADERS[rejection],
-      ),
-    )
+    this.resolve(new RejectionAnswers(this.rejectResponse).answer(rejection))
   }
 }

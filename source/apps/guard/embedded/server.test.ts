@@ -5,6 +5,7 @@ import {
   type Authenticator,
   type Authenticators,
   type HttpManifest,
+  MANIFEST_PATH,
   parseManifest,
   REJECTION_FOR_IDENTITY,
   RejectResponses,
@@ -39,11 +40,15 @@ class HeaderScheme implements Authenticators.Scheme {
  * names by default, the `member.directory` policy (core/opa's fixtures) lets
  * members see each email's domain and names' initials, and admins full names.
  */
-async function withDirectory(test: (guard: Server) => Promise<void>) {
+async function withDirectory(
+  test: (guard: Server, upstreamCalls: () => number) => Promise<void>,
+) {
+  let calls = 0
   const upstream = Deno.serve(
     { port: 0, onListen: () => {} },
-    () =>
-      Response.json({
+    () => {
+      calls++
+      return Response.json({
         members: [
           {
             id: 'u-1',
@@ -52,12 +57,17 @@ async function withDirectory(test: (guard: Server) => Promise<void>) {
             phone: '+44 20 7946 0001',
           },
         ],
-      }),
+      })
+    },
   )
   const registry = new Policy.Registries.InMemory()
   await registry.associate(
     new Access.Action('directory.members.list'),
     new Policy.Identifier('member.directory'),
+  )
+  await registry.associate(
+    new Access.Action('directory.idhn.manifest.read'),
+    new Policy.Identifier('resource.steward'),
   )
   const judge = new Judge.Local(
     registry,
@@ -90,6 +100,7 @@ async function withDirectory(test: (guard: Server) => Promise<void>) {
         new RejectResponses.Bare(),
         2000,
       ),
+      () => calls,
     )
   } finally {
     await upstream.shutdown()
@@ -130,5 +141,36 @@ Deno.test('embedded guard: an anonymous caller is not let in at all', async () =
     const response = await guard.handle(list())
     assertEquals(response.status, 401)
     await response.body?.cancel()
+  })
+})
+
+const readManifest = (role?: string) =>
+  new Request(`http://guard.test${MANIFEST_PATH}`, {
+    headers: role ? { 'x-test-role': role } : {},
+  })
+
+Deno.test('embedded guard: serves its manifest to whom the policies allow, in its own syntax, never asking the service', async () => {
+  await withDirectory(async (guard, upstreamCalls) => {
+    const response = await guard.handle(readManifest('admin'))
+    assertEquals(response.status, 200)
+    const manifest = parseManifest(await response.json()) as HttpManifest
+    assertEquals(manifest.id, 'directory')
+    assertEquals(manifest.actions[0].restrict?.toJSON(), {
+      '/members/*/email': 'covered',
+      '/members/*/name': 'covered',
+      '/members/*/phone': { kind: 'partial', keep: 'last', count: 4 },
+    })
+    assertEquals(upstreamCalls(), 0)
+  })
+})
+
+Deno.test('embedded guard: refuses its manifest to a member the policies do not allow, and asks an anonymous caller to sign in', async () => {
+  await withDirectory(async (guard) => {
+    const member = await guard.handle(readManifest('member'))
+    assertEquals(member.status, 403)
+    await member.body?.cancel()
+    const anonymous = await guard.handle(readManifest())
+    assertEquals(anonymous.status, 401)
+    await anonymous.body?.cancel()
   })
 })
