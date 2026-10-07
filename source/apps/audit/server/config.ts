@@ -14,8 +14,8 @@ export interface Config {
   ingestToken: string | undefined
   /** How many batches are taken in at once; a shipper sending more is told to back off. */
   maxConcurrentBatches: number
-  /** A JSON Lines file to follow instead of, or beside, being sent records (development). */
-  tailPath: string | undefined
+  /** JSON Lines files to follow instead of, or beside, being sent records (development, or one host without a shipper). */
+  tailPaths: string[]
   tailPollMs: number
   purgeEveryMs: number
 }
@@ -40,7 +40,7 @@ export class ConfigLoader {
         'AUDIT_MAX_CONCURRENT_BATCHES',
         4,
       ),
-      tailPath: this.environment.optionalString('AUDIT_TAIL_PATH'),
+      tailPaths: this.list('AUDIT_TAIL_PATH'),
       tailPollMs: this.environment.positiveNumber('AUDIT_TAIL_POLL_MS', 1000),
       purgeEveryMs: this.environment.positiveNumber(
         'AUDIT_PURGE_EVERY_MS',

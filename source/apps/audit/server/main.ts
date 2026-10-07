@@ -51,8 +51,8 @@ const purge = () => {
 purge()
 setInterval(purge, config.purgeEveryMs)
 
-if (config.tailPath !== undefined) {
-  const tail = new Tail(config.tailPath, config.tailPollMs)
+for (const path of config.tailPaths) {
+  const tail = new Tail(path, config.tailPollMs)
   tail.OnLines.Do(async (lines: string) => {
     const report = await ingestion.ingest(lines)
     if (report.refused.length > 0) log.write('audit.refused', report)
@@ -64,7 +64,7 @@ const server = new Server(
   new Intake(ingestion, config.ingestToken, config.maxConcurrentBatches),
   transport,
 )
-log.write('audit.started', { tail: config.tailPath ?? null })
+log.write('audit.started', { tails: config.tailPaths })
 
 Deno.serve(
   {

@@ -627,7 +627,7 @@ transaction, which overviews are read from. Raw records are kept
 
 The console asks it horizon queries (`audit.overview`, `audit.trails`,
 `audit.trail`), posted to their names. For development, `AUDIT_TAIL_PATH`
-follows a JSON Lines file instead of waiting for a shipper.
+follows JSON Lines files instead of waiting for a shipper.
 
 | Env var                        | Required | Default                        | Meaning                                                |
 | ------------------------------ | -------- | ------------------------------ | ------------------------------------------------------ |
@@ -638,8 +638,8 @@ follows a JSON Lines file instead of waiting for a shipper.
 | `AUDIT_COVER_FACTS`            | no       | —                              | JSON Pointers of other facts to cover (`/email`)       |
 | `AUDIT_INGEST_TOKEN`           | no       | —                              | Bearer token shippers must present                     |
 | `AUDIT_MAX_CONCURRENT_BATCHES` | no       | `4`                            | Batches taken in at once                               |
-| `AUDIT_TAIL_PATH`              | no       | —                              | A JSON Lines file to follow                            |
-| `AUDIT_TAIL_POLL_MS`           | no       | `1000`                         | How often to read it                                   |
+| `AUDIT_TAIL_PATH`              | no       | —                              | JSON Lines files to follow, comma-separated            |
+| `AUDIT_TAIL_POLL_MS`           | no       | `1000`                         | How often to read them                                 |
 | `AUDIT_PURGE_EVERY_MS`         | no       | `3600000`                      | How often to purge                                     |
 | `AUDIT_PORT`                   | no       | `8083`                         | Listening port                                         |
 
