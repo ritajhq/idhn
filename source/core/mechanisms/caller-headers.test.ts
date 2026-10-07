@@ -38,6 +38,8 @@ Deno.test('CallerHeaders: the caller is who the guard in front says, keeping the
   credential.PresentIn(onward)
   assertEquals(onward.Header('cookie'), 'sid=abc')
   assertEquals(onward.Header('x-other'), undefined)
+  assertEquals(onward.Header('x-idhn-subject'), undefined)
+  assertEquals(onward.Header('x-idhn-claims'), undefined)
 })
 
 Deno.test('CallerHeaders: no word from the guard is no caller, and claims it cannot read make an invalid one', async () => {

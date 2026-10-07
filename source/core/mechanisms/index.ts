@@ -1,1 +1,1 @@
-export { CallerHeaders } from './caller-headers.ts'
+export { CallerHeaders, Forwarded } from './caller-headers.ts'
