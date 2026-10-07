@@ -1,6 +1,7 @@
 import * as Distribution from '@idhn/distribution'
 import * as Environment from '@idhn/environment'
 import * as Log from '@idhn/log'
+import { Base } from './base.ts'
 import { Builds } from './builds.ts'
 import { Compiler } from './compiler.ts'
 import { ConfigLoader, type SourceConfig, type SourceKind } from './config.ts'
@@ -20,7 +21,8 @@ const log = new Log.JsonLines()
  * is refused and leaves the last good set published.
  */
 const publication = new Distribution.Publication()
-const builds = new Builds(new Compiler(new Opa(config.opaPath)), publication)
+const base = config.baseDir === undefined ? Base.none() : Base.at(config.baseDir)
+const builds = new Builds(new Compiler(new Opa(config.opaPath)), publication, base)
 builds.OnBuilt.Do((set) => log.write('builder.built', { version: set.version }))
 builds.OnRefused.Do((version, problems) => log.write('builder.refused', { version, problems }))
 
@@ -51,6 +53,9 @@ const { start, intake } = wire(config.source)
 
 const server = new Server(new Distribution.Http.Server(publication), intake, publication)
 log.write('builder.started', { source: config.source.kind })
+// The base alone first, so judges have policies before anything is published;
+// whatever the source then announces is built after it, and published last.
+if (base.alone !== undefined) builds.build(base.alone)
 await start()
 
 Deno.serve(

@@ -1,5 +1,6 @@
 import { Delegate, type Emitter } from '@duesabati/evento'
 import type * as Distribution from '@idhn/distribution'
+import { Base } from './base.ts'
 import { CompileError, type Compiler } from './compiler.ts'
 import type { SourceTree } from './source-tree.ts'
 
@@ -22,7 +23,8 @@ export type CheckOutcome =
  *
  * Every outcome is announced on `OnBuilt` or `OnRefused`, and returned to
  * whoever asked (an upload, answered with it). A `check` builds without
- * publishing, announces nothing, and need not wait for builds.
+ * publishing, announces nothing, and need not wait for builds. Every tree is
+ * built with the deployment's `Base` beneath it.
  */
 export class Builds {
   private readonly built = new Delegate<[Distribution.PolicySet]>()
@@ -32,6 +34,7 @@ export class Builds {
   constructor(
     private readonly compiler: Compiler,
     private readonly publication: Distribution.Publication,
+    private readonly base: Base = Base.none(),
   ) {}
 
   get OnBuilt(): Emitter<[Distribution.PolicySet]> {
@@ -45,7 +48,7 @@ export class Builds {
   /** Whether `tree` would build — every reason it wouldn't, if not — publishing nothing. */
   async check(tree: SourceTree): Promise<CheckOutcome> {
     try {
-      await this.compiler.compile(tree)
+      await this.compile(tree)
       return { passed: true }
     } catch (error) {
       if (!(error instanceof CompileError)) throw error
@@ -60,9 +63,14 @@ export class Builds {
     return outcome
   }
 
+  /** `tree`, with the base beneath it, compiled. */
+  private compile(tree: SourceTree): Promise<Distribution.PolicySet> {
+    return this.base.beneath(tree, (based) => this.compiler.compile(based))
+  }
+
   private async buildNow(tree: SourceTree): Promise<BuildOutcome> {
     try {
-      const set = await this.compiler.compile(tree)
+      const set = await this.compile(tree)
       this.publication.publish(set)
       this.built.Invoke(set)
       return { built: true, set }

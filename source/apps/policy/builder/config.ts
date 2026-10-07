@@ -15,6 +15,8 @@ export interface Config {
   opaPath: string
   gitPath: string
   source: SourceConfig
+  /** The deployment's own policies, beneath every tree built (see `Base`); none when unset. */
+  baseDir: string | undefined
 }
 
 const DEFAULT_PORT = 8082
@@ -49,6 +51,7 @@ export class ConfigLoader {
       opaPath: this.environment.optionalString('OPA_PATH') ?? 'opa',
       gitPath: this.environment.optionalString('GIT_PATH') ?? 'git',
       source: sources[kind](),
+      baseDir: this.environment.optionalString('BASE_SOURCES_DIR'),
     }
   }
 }

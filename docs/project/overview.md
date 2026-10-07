@@ -570,12 +570,24 @@ judges keep the last good set. Each outcome is logged as `builder.built` or
   no change notifications (`SOURCE_WATCH=poll`), each change versioned by that
   hash. For running it by hand.
 
+**The base.** `BASE_SOURCES_DIR` names policies the deployment owns rather
+than whoever publishes sources: a tree with its own `policies/*.rego` and
+`policies.yaml` (anything else in it is ignored). `Base` builds every tree
+with the base beneath it, so no publication can take the base's policies
+away, and refuses a tree that replaces a base policy or governs an action the
+base governs: with deny-overrides, one more policy on such an action could
+deny it. That is where the console's own actions are governed, so the console
+can't lock its operators out. At start the builder publishes the base alone,
+so judges have policies, and the console is reachable, before anything has
+been published. Changing the base means changing the deployment.
+
 `GET /health` answers with the version published.
 
 | Env var          | Required     | Default                   | Meaning                                    |
 | ---------------- | ------------ | ------------------------- | ------------------------------------------ |
 | `POLICY_SOURCE`  | no           | `upload`                  | `upload`, `git` or `directory`             |
 | `STATE_DIR`      | no           | `/var/lib/policy-builder` | Where the last good upload is kept         |
+| `BASE_SOURCES_DIR` | no         | —                         | The deployment's base policies             |
 | `GIT_URL`        | for `git`    | —                         | Repository to clone                        |
 | `GIT_REF`        | no           | `main`                    | Branch or tag to follow                    |
 | `GIT_POLL_MS`    | no           | `30000`                   | How often to fetch                         |
