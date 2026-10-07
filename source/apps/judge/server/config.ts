@@ -18,6 +18,8 @@ export interface Config {
   port: number
   maxDecisionMs: number
   policies: PoliciesConfig
+  /** Which replica this is, as its audit lines say: `INSTANCE`, else the container's `HOSTNAME`. */
+  instance: string
 }
 
 const DEFAULT_PORT = 8081
@@ -34,6 +36,8 @@ export class ConfigLoader {
     const builder = this.environment.optionalUrl('POLICY_SOURCE_URL')
     return {
       port: this.environment.port('JUDGE_PORT', DEFAULT_PORT),
+      instance: this.environment.optionalString('INSTANCE') ??
+        this.environment.optionalString('HOSTNAME') ?? 'unknown',
       maxDecisionMs: this.environment.positiveNumber(
         'MAX_DECISION_MS',
         DEFAULT_MAX_DECISION_MS,

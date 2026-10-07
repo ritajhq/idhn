@@ -1,0 +1,20 @@
+{
+  "name": "@idhn/contract",
+  "exports": "./index.ts",
+  "imports": {
+    "@std/assert": "jsr:@std/assert@1.0.14",
+    "@ritaj/horizon": "jsr:@ritaj/horizon",
+    "@ritaj/mux": "jsr:@ritaj/mux",
+    "@ritaj/storage": "jsr:@ritaj/storage"
+  },
+  "fmt": {
+    "semiColons": false,
+    "singleQuote": true,
+    "trailingCommas": "onlyMultiLine"
+  },
+  "lint": {
+    "rules": {
+      "exclude": ["no-slow-types"]
+    }
+  }
+}

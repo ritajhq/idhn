@@ -35,3 +35,14 @@ Deno.test('JsonLines.writeError: writes an error as a single entry, stack trace 
   assertEquals(typeof thrown.stack, 'string')
   assertEquals(other, { event: 'guard.error', error: 'not an error' })
 })
+
+Deno.test('JsonLines.write: adds the stamp\'s fields to every entry, afresh each time', () => {
+  const lines: string[] = []
+  let next = 0
+  const log = new JsonLines((line) => lines.push(line), () => ({ recordId: `r-${++next}` }))
+
+  log.write('guard.request', { outcome: 'forwarded' })
+  log.write('guard.request', { outcome: 'rejected' })
+
+  assertEquals(lines.map((line) => JSON.parse(line).recordId), ['r-1', 'r-2'])
+})

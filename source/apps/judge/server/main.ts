@@ -1,4 +1,5 @@
 import * as Distribution from '@idhn/distribution'
+import * as Audit from '@idhn/audit'
 import * as Judge from '@idhn/judge'
 import * as Environment from '@idhn/environment'
 import * as Log from '@idhn/log'
@@ -9,7 +10,10 @@ import { PolicyLoader } from './policy-loader.ts'
 import { PolicyPuller } from './policy-puller.ts'
 
 const config = new ConfigLoader(new Environment.Reader(Deno.env)).load()
-const log = new Log.JsonLines()
+const log = new Log.JsonLines(
+  console.log,
+  new Audit.Stamp({ app: 'judge', instance: config.instance }).fields,
+)
 
 /**
  * The judge the server asks. It judges with the last policy set loaded, and

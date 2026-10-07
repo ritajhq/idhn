@@ -8,6 +8,8 @@ export interface Config {
   upstreamUrl: URL
   port: number
   rejectResponseUrl: URL | undefined
+  /** Which replica this is, as its audit lines say: `INSTANCE`, else the container's `HOSTNAME`. */
+  instance: string
 }
 
 /** What only a guard that asks a judge needs: everything its in-process judge is built from. */
@@ -40,6 +42,8 @@ export class ConfigLoader {
       upstreamUrl: this.environment.requireUrl('UPSTREAM_URL'),
       port: this.environment.port('PROXY_PORT', DEFAULT_PORT),
       rejectResponseUrl: this.environment.optionalUrl('REJECT_RESPONSE_URL'),
+      instance: this.environment.optionalString('INSTANCE') ??
+        this.environment.optionalString('HOSTNAME') ?? 'unknown',
     }
   }
 

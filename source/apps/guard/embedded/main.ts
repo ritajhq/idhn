@@ -4,6 +4,7 @@ import {
   loadManifestFile,
   RejectResponses,
 } from '@idhn/guard'
+import * as Audit from '@idhn/audit'
 import * as Judge from '@idhn/judge'
 import * as OPA from '@idhn/opa'
 import * as Policy from '@idhn/policy'
@@ -15,9 +16,15 @@ import { Server } from './server.ts'
 const configLoader = new ConfigLoader(new Environment.Reader(Deno.env))
 const config = configLoader.load()
 const enforcement = new Enforcement(config.enforcement)
-const log = new Log.JsonLines()
-
 const manifest = await loadManifestFile(config.manifestPath, 'http')
+const log = new Log.JsonLines(
+  console.log,
+  new Audit.Stamp({
+    app: 'guard',
+    resource: manifest.id,
+    instance: config.instance,
+  }).fields,
+)
 const rejectResponse = await new RejectResponses.Source(
   config.rejectResponseUrl,
 ).load()

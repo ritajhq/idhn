@@ -7,14 +7,18 @@
  * Writing is synchronous and local on purpose: shipping entries to wherever
  * they are stored is the shipper's job, never this process's, so logging adds
  * no network I/O to the path it records.
+ *
+ * A `stamp`, when given, adds its fields to every entry (an id, the
+ * process that wrote it), called afresh for each one.
  */
 export class JsonLines {
   constructor(
     private readonly writeLine: (line: string) => void = console.log,
+    private readonly stamp: () => object = () => ({}),
   ) {}
 
   write(event: string, fields: object): void {
-    this.writeLine(JSON.stringify({ event, ...fields }))
+    this.writeLine(JSON.stringify({ event, ...this.stamp(), ...fields }))
   }
 
   /** Writes an error — typically one nothing else handled — as a single entry, stack trace included, instead of free-form text. */

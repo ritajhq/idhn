@@ -4,6 +4,7 @@ import {
   loadManifestFile,
   RejectResponses,
 } from '@idhn/guard'
+import * as Audit from '@idhn/audit'
 import * as Judge from '@idhn/judge'
 import * as Environment from '@idhn/environment'
 import * as Log from '@idhn/log'
@@ -41,7 +42,14 @@ const server = new Server(
   config.judgeTimeoutMs,
 )
 
-const log = new Log.JsonLines()
+const log = new Log.JsonLines(
+  console.log,
+  new Audit.Stamp({
+    app: 'guard',
+    resource: manifest.id,
+    instance: config.instance,
+  }).fields,
+)
 log.write('guard.started', { enforcement: config.enforcement })
 server.OnRequestHandled.Do((record) => log.write('guard.request', record))
 
