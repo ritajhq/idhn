@@ -9,5 +9,9 @@ build:
     kit: deno.bundle
   policy/builder:
     kit: deno.bundle
+  audit/server:
+    kit: deno.bundle
+  console/server:
+    kit: deno.bundle
   console/web:
     kit: react

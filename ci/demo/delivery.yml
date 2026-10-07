@@ -1,4 +1,3 @@
-# yaml-language-server: $schema=https://raw.githubusercontent.com/ritajhq/ensemble/refs/heads/main/docs/delivery.schema.json
 version: v1
 
 # Each image bakes in its demo configuration (policy bundle, policy registry,

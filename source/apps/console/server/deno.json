@@ -1,0 +1,19 @@
+{
+  "name": "@idhn/console-server",
+  "exports": "./main.ts",
+  "tasks": {
+    "start": "deno run --allow-net --allow-read --allow-write --allow-env main.ts"
+  },
+  "imports": {
+    "@std/assert": "jsr:@std/assert@1.0.14",
+    "@std/path": "jsr:@std/path@1.1.6",
+    "@std/yaml": "jsr:@std/yaml@1.1.2",
+    "@ritaj/horizon": "jsr:@ritaj/horizon",
+    "@ritaj/mux": "jsr:@ritaj/mux"
+  },
+  "fmt": {
+    "semiColons": false,
+    "singleQuote": true,
+    "trailingCommas": "onlyMultiLine"
+  }
+}

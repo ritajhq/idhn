@@ -1,0 +1,48 @@
+# The console's actions, for the idhn guard in front of it: one per call,
+# each a horizon message posted to its own name. Associate policies with them
+# in the console itself, so who may read, author, publish or audit is decided
+# like anything else idhn guards.
+id: console
+protocol: http
+authentication:
+  scheme: session-cookie
+  # The auth server's session endpoint, set per deployment.
+  session_url: http://auth.internal/api/auth/get-session
+actions:
+  # The web app itself: its page, at any path, and its assets.
+  - name: app.open
+    match: { method: GET, path: [/, '/*path'] }
+  # Reads.
+  - name: resources.list
+    match: { method: POST, path: /resources.list }
+  - name: policies.draft
+    match: { method: POST, path: /policies.draft }
+  - name: policies.check
+    match: { method: POST, path: /policies.check }
+  - name: policies.revisions
+    match: { method: POST, path: /policies.revisions }
+  - name: policies.revision
+    match: { method: POST, path: /policies.revision }
+  - name: audit.overview
+    match: { method: POST, path: /audit.overview }
+  - name: audit.trails
+    match: { method: POST, path: /audit.trails }
+  - name: audit.trail
+    match: { method: POST, path: /audit.trail }
+  # Changes.
+  - name: resources.import
+    match: { method: POST, path: /resources.import }
+  - name: resources.remove
+    match: { method: POST, path: /resources.remove }
+  - name: policies.write
+    match: { method: POST, path: /policies.write }
+  - name: policies.remove
+    match: { method: POST, path: /policies.remove }
+  - name: policies.associate
+    match: { method: POST, path: /policies.associate }
+  - name: policies.dissociate
+    match: { method: POST, path: /policies.dissociate }
+  - name: policies.restore
+    match: { method: POST, path: /policies.restore }
+  - name: policies.publish
+    match: { method: POST, path: /policies.publish }

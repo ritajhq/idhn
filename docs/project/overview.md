@@ -23,7 +23,9 @@ rationale.
 | `fake-service`     | `@idhn/fake-service`     | HTTP server  | Stand-in protected service that echoes what it received (demo only)        |
 | `judge/server`     | `@idhn/judge-server`     | HTTP server  | Serves a `Judge.Behavior` over HTTP; internal only, never exposed publicly |
 | `policy/builder`   | `@idhn/policy-builder`   | HTTP server  | Checks, tests and compiles policy sources; judges pull the result          |
-| `web`              | —                        | Web frontend | React + React Router UI scaffold (early stage)                             |
+| `audit/server`     | `@idhn/audit-server`     | HTTP server  | Keeps guard and judge records from log shippers, answers audit queries     |
+| `console/server`   | `@idhn/console-server`   | HTTP server  | The console: resources, policies, associations and the audit, over horizon |
+| `console/web`      | `@idhn/console-web`      | Web frontend | The console's dashboard, on Fluid Functionalism                            |
 
 ## Deployment topologies
 
@@ -81,6 +83,21 @@ its parser and its own `ActionResolver`, and giving it its own guard entry point
 that pairs that resolver with a matching `ServiceProvider`.
 `loadManifestFile(path, protocol)` rejects a manifest declared for a different
 protocol than the entry point serves. Only `http` exists today.
+
+### Reading a guard's manifest
+
+Every guard serves its own manifest at `GET /.well-known/idhn/manifest`, so the
+console can import a resource from its guard's URL. Reading it is an action like
+any other, `<manifest id>.idhn.manifest.read`: the guard authenticates the
+caller with the manifest's scheme, asks the judge, logs it as a `guard.request`,
+and answers it itself without asking the service. Until a policy is associated
+with it, everyone is refused, as for any action. The answer is the manifest in
+its own syntax with every default spelled out (`writeManifest`), so
+`parseManifest` reads back exactly what the guard holds. A policy's `show` rule
+can restrict fields of it like any answer.
+
+Action names starting with `idhn.` are reserved for actions like this one, and a
+manifest declaring one is refused.
 
 ## Who is asking: authentication
 
@@ -308,7 +325,13 @@ network and out of the request's latency.
   when handling failed. Fields the guard never got to are left out, so a request
   no action matched has only its method, path and rejection.
 
-Both carry a `timestamp` (when handling started) and `durationMs`.
+Both carry a `timestamp` (when handling started) and `durationMs`. Every line
+also carries a `recordId` (a UUID, so the audit keeps a line delivered twice
+only once), the `schema` of the audit line format it was written in (`1`), and
+its `source`: the `app` (`guard` or `judge`), the `resource` a guard guards (its
+manifest id), and the `instance`, read from `INSTANCE` or else the container's
+`HOSTNAME`. The audit service reads these lines; see
+[console-plan.md](console-plan.md#audit).
 
 Faults nothing handled (a policy missing from the bundle, a bug) are written as
 one `guard.error` or `judge.error` line with the message, the error class name
@@ -535,6 +558,10 @@ judges keep the last good set. Each outcome is logged as `builder.built` or
   the version, `422` with every problem, or `400` for what isn't a tar. Only an
   upload that built is kept in `STATE_DIR`, and published again after a
   restart. This is the builder's only state, so it runs as one instance.
+  `POST /checks` takes the same tar as a dry run: it is checked, tested and
+  compiled, answered `200` or `422` with every problem the same way, and then
+  thrown away, publishing nothing. The console uses it to tell an author
+  whether sources would build before publishing them.
 - **`git`**: clones `GIT_URL` at `GIT_REF` and fetches it every `GIT_POLL_MS`,
   each new commit versioned by its id. A clone or fetch that fails is logged
   as `builder.source_failed` and tried again at the next poll.
@@ -560,9 +587,52 @@ judges keep the last good set. Each outcome is logged as `builder.built` or
 | `GIT_PATH`       | no           | `git`                     | The `git` CLI                              |
 | `BUILDER_PORT`   | no           | `8082`                    | Listening port                             |
 
-`PUT /sources` has no authentication: keep the builder on an internal network,
+`PUT /sources` and `POST /checks` have no authentication: keep the builder on an internal network,
 never routed publicly. It is shipped as `source/ship/policy/builder/Dockerfile`,
 which carries `git` and the static `opa` binary.
+
+### `audit/server`
+
+Keeps what guards and judges did, and answers questions about it
+([main.ts](../../source/apps/audit/server/main.ts)). Guards and judges still
+only write JSON Lines to stdout; a log shipper (Vector, Fluent Bit, an
+OpenTelemetry collector) posts them in batches to `POST /records`, at least
+once. Each batch is read (`Audit.Ingestion`): `guard.request` and
+`judge.decision` lines become records, other lines are ignored, and lines that
+can't be read are reported in the answer without holding back the rest. Each
+decision's context is redacted before it is kept: every field of `auth` is
+covered but `status` and `subject`, unless kept with `AUDIT_KEEP_AUTH`, and the
+facts named in `AUDIT_COVER_FACTS` are covered too.
+
+Records are kept in SQLite (`Audit.Stores.Sqlite`, one file). A record kept
+before (same `recordId`) is not kept or counted again, so a shipper may resend
+freely. Each new record also counts towards per-minute rollups, in the same
+transaction, which overviews are read from. Raw records are kept
+`AUDIT_RAW_DAYS`, rollups `AUDIT_ROLLUP_DAYS`, and the rest is purged every
+`AUDIT_PURGE_EVERY_MS`. A batch that can't be kept, or one sent while
+`AUDIT_MAX_CONCURRENT_BATCHES` are being taken in, is answered `503` with
+`Retry-After`, and the shipper keeps it and retries.
+
+The console asks it horizon queries (`audit.overview`, `audit.trails`,
+`audit.trail`), posted to their names. For development, `AUDIT_TAIL_PATH`
+follows a JSON Lines file instead of waiting for a shipper.
+
+| Env var                        | Required | Default                        | Meaning                                                |
+| ------------------------------ | -------- | ------------------------------ | ------------------------------------------------------ |
+| `AUDIT_DB_PATH`                | no       | `/var/lib/idhn-audit/audit.db` | The SQLite file                                        |
+| `AUDIT_RAW_DAYS`               | no       | `30`                           | How long raw records are kept                          |
+| `AUDIT_ROLLUP_DAYS`            | no       | `365`                          | How long rollups are kept                              |
+| `AUDIT_KEEP_AUTH`              | no       | —                              | `auth` fields kept in the clear (`claims.role,issuer`) |
+| `AUDIT_COVER_FACTS`            | no       | —                              | JSON Pointers of other facts to cover (`/email`)       |
+| `AUDIT_INGEST_TOKEN`           | no       | —                              | Bearer token shippers must present                     |
+| `AUDIT_MAX_CONCURRENT_BATCHES` | no       | `4`                            | Batches taken in at once                               |
+| `AUDIT_TAIL_PATH`              | no       | —                              | A JSON Lines file to follow                            |
+| `AUDIT_TAIL_POLL_MS`           | no       | `1000`                         | How often to read it                                   |
+| `AUDIT_PURGE_EVERY_MS`         | no       | `3600000`                      | How often to purge                                     |
+| `AUDIT_PORT`                   | no       | `8083`                         | Listening port                                         |
+
+Queries carry no authentication: keep it internal, reached only by the console
+and the shippers. It is shipped as `source/ship/audit/server/Dockerfile`.
 
 ### `fake-service`
 
@@ -593,14 +663,46 @@ Once running, `/` is rejected and `/?vip=true` is proxied through. The
 [README](../../ci/demo/README.md) also explains how to run the three apps by
 hand.
 
-### `web`
+### `console/server` and `console/web`
 
-A React 19 + React Router 7 frontend built with the Ensemble toolchain. The
-`{{ensemble:*}}` placeholders in `public/index.html` are template slots for the
-base path and injected env. It uses Tailwind together with shadcn theme tokens
-and the shared `@ritaj/ui` library (`source/libs/ui`). This app is still a
-scaffold: `main.tsx` imports `./src/router.tsx`, which does not exist yet, and
-none of its features are defined.
+Where people who run idhn see and change what it does
+([console-plan.md](console-plan.md)). The web app is a sidebar dashboard on
+Fluid Functionalism (`@ritaj/ui`, Untitled UI icons), built by the ensemble
+`react` kit. It talks to the server only in horizon messages over mux, each
+posted to its own name (`POST /policies.write`), which the server answers
+([main.ts](../../source/apps/console/server/main.ts)):
+
+- **Resources** (`@idhn/resources`): a resource is imported from its guard's URL
+  by reading the manifest the guard serves (see "Reading a guard's manifest"),
+  presenting the caller's own cookie or authorization header, so the guard's
+  policies decide who may import it. The console keeps the last import of each,
+  by manifest id.
+- **Policies and associations** (`@idhn/authoring`): the console owns the policy
+  sources. Everyone edits one shared draft; each change makes a new draft
+  revision, and a change based on a revision someone else has changed since is
+  refused (`Stale`), so nobody's work is overwritten. A policy is named by the
+  package its source declares. Checking asks the builder for a dry run
+  (`POST /checks`); publishing uploads the tree (`PUT /sources`), and records it
+  as the next revision (`r1`, `r2`, …), which can be restored into the draft.
+  The builder must run in `upload` mode.
+- **Audit**: queries are passed on to `audit/server` as asked.
+
+The console keeps its state in one SQLite file. It must sit behind an idhn
+guard: it learns who is calling from the guard's `x-idhn-*` headers
+(`Mechanisms.CallerHeaders`), and the guard judges each call as an action.
+[manifest.yaml](../../source/apps/console/server/manifest.yaml) is that guard's
+manifest, one action per call plus `app.open` for the page; associate policies
+with those actions in the console itself.
+
+| Env var              | Required | Default                            | Meaning                              |
+| -------------------- | -------- | ---------------------------------- | ------------------------------------ |
+| `POLICY_BUILDER_URL` | yes      | —                                  | The policy builder, in `upload` mode |
+| `AUDIT_URL`          | yes      | —                                  | The audit server                     |
+| `CONSOLE_DB_PATH`    | no       | `/var/lib/idhn-console/console.db` | The SQLite file                      |
+| `CONSOLE_DIST`       | no       | `source/artifacts/console/web`     | The built web app                    |
+| `CONSOLE_PORT`       | no       | `8084`                             | Listening port                       |
+
+Both builds ship together as `source/ship/console/server/Dockerfile`.
 
 ## Conventions shared by the server apps
 
