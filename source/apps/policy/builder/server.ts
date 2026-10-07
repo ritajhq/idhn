@@ -3,8 +3,9 @@ import type { NoIntake, UploadIntake } from './intake.ts'
 
 /**
  * The policy builder's HTTP surface: `GET /policies` for the judges (see
- * `Distribution.Http.Server`), `PUT /sources` for uploads (refused by a
- * builder that doesn't take them), and `GET /health`, which also says which
+ * `Distribution.Http.Server`), `PUT /sources` for uploads and `POST /checks`
+ * for dry runs of them (both refused by a builder that doesn't take uploads),
+ * and `GET /health`, which also says which
  * version is published.
  */
 export class Server {
@@ -21,6 +22,9 @@ export class Server {
     const { pathname } = new URL(request.url)
     if (pathname === '/sources' && request.method === 'PUT') {
       return this.intake.handle(request)
+    }
+    if (pathname === '/checks' && request.method === 'POST') {
+      return this.intake.check(request)
     }
     if (pathname === '/health' && request.method === 'GET') {
       return Response.json({ ok: true, published: this.publication.current?.version ?? null })

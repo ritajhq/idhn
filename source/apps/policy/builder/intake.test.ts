@@ -70,3 +70,29 @@ Deno.test('Upload.start: publishes the last kept upload again after a restart', 
 
   assertEquals(await built, 'commit-1')
 })
+
+function check(archive: Uint8Array<ArrayBuffer>, version: string): Request {
+  return new Request('http://builder/checks', {
+    method: 'POST',
+    headers: { [VERSION_HEADER]: version },
+    body: archive,
+  })
+}
+
+Deno.test('UploadIntake.check: says whether sources would build, publishing nothing either way', async () => {
+  const { publication, upload, intake } = builder(await Deno.makeTempDir())
+  await upload.start()
+
+  const passing = await intake.check(check(await tarOf(VALID_TREE), 'draft-1'))
+  assertEquals(passing.status, 200)
+  assertEquals(await passing.json(), { version: 'draft-1', problems: [] })
+
+  const failing = await intake.check(check(
+    await tarOf({ ...VALID_TREE, 'policies.yaml': 'associations:\n  shop.browse: [shop.missing]\n' }),
+    'draft-2',
+  ))
+  assertEquals(failing.status, 422)
+  assertEquals((await failing.json()).problems.length, 1)
+
+  assertEquals(publication.current, undefined)
+})
