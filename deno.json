@@ -5,6 +5,7 @@
     "source/libs/**",
     ".ensemble/kits/**"
   ],
+  "nodeModulesDir": "auto",
   "imports": {
     "@ensemble/kit-sdk": "./.ensemble/repository/source/core/kit-sdk/index.ts",
     "@ensemble/core": "./.ensemble/repository/source/core/core/index.ts"
