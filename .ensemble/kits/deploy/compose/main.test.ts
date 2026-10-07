@@ -5,6 +5,7 @@ import * as KitSdk from "@ensemble/kit-sdk";
 import composeKit from "./main.ts";
 import { assembleComposeDocument } from "./compose-document.ts";
 import { garageSeedScript } from "./provisioners/garage-config.ts";
+import { caddyReloadScript } from "./provisioners/gateway.ts";
 
 const FIXTURE = fromFileUrl(
   new URL(
@@ -585,7 +586,7 @@ Deno.test("compose kit: object storage renders as a Garage service on its own im
   assertEquals(document.services.bucket.image, "dxflrs/garage:v1.0.1");
   assertEquals("entrypoint" in document.services.bucket, false);
   assertEquals("environment" in document.services.bucket, false);
-  assertEquals(document.services.bucket.ports, ["3900"]);
+  assertEquals("ports" in document.services.bucket, false);
   assertEquals(document.services.bucket.configs, [
     { source: "bucket-garage-toml", target: "/etc/garage.toml" },
   ]);
@@ -745,6 +746,27 @@ Deno.test("compose kit: a gateway with ingress networks renders as a Caddy servi
       "handle_path /strip/* {\n\t\treverse_proxy http://api:8080\n\t}",
     ),
     true,
+  );
+});
+
+Deno.test("compose kit: a gateway declares an apply-time init command that loads its Caddyfile through Caddy's admin API, since compose never recreates a container whose inline config alone changed", async () => {
+  const workload = new KitSdk.Deploy.Manifest.Parser().parse(WITH_GATEWAY);
+  const { artifacts, graph } = await renderNetworkingWorkload(workload);
+  const document = assembleComposeDocument(artifacts, graph) as {
+    configs?: Record<string, { content: string }>;
+  };
+
+  // Read structurally, same as the object-storage seed: a vendoring
+  // workspace's kit-sdk may predate `initCommands`.
+  assertEquals(
+    (artifacts as { initCommands?: unknown }).initCommands,
+    [{
+      name: "gateway-caddy-reload",
+      run: caddyReloadScript(
+        "gateway",
+        document.configs!["gateway-caddyfile"].content,
+      ),
+    }],
   );
 });
 
