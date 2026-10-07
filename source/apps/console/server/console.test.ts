@@ -1,4 +1,5 @@
 import { assertEquals } from '@std/assert'
+import { parse as parseYaml } from '@std/yaml'
 import { DatabaseSync } from 'node:sqlite'
 import * as Access from '@idhn/access'
 import * as Audit from '@idhn/audit'
@@ -359,4 +360,29 @@ Deno.test('console manifest: names every call the console answers, so its guard 
     .map((message) => MUX.Packet.Registry.Read(new message()).split('/').pop()!)
   assertEquals(answered.filter((name) => !declared.has(name)), [])
   assertEquals(declared.size, answered.length)
+})
+
+Deno.test("console manifest: the demo's copy declares the same actions, each one governed by the demo's base policies", async () => {
+  const demo = new URL('../../../ship/demo/', import.meta.url)
+  const actionsOf = async (path: string) =>
+    (await Guard.loadManifestFile(path, 'http')).actions.map((action) =>
+      `${action.name} ${JSON.stringify(action.match)}`
+    )
+  assertEquals(
+    await actionsOf(new URL('console-guard/manifest.yaml', demo).pathname),
+    await actionsOf(new URL('./manifest.yaml', import.meta.url).pathname),
+  )
+
+  const registry = parseYaml(
+    await Deno.readTextFile(new URL('builder/base/policies.yaml', demo)),
+  ) as { associations: Record<string, string[]> }
+  const manifest = await Guard.loadManifestFile(
+    new URL('./manifest.yaml', import.meta.url).pathname,
+    'http',
+  )
+  assertEquals(
+    Object.keys(registry.associations).sort(),
+    ['idhn.manifest.read', ...manifest.actions.map((action) => action.name)]
+      .map((name) => `console.${name}`).sort(),
+  )
 })

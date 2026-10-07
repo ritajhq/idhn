@@ -1,8 +1,11 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ritajhq/ensemble/refs/heads/main/docs/delivery.schema.json
 version: v1
 
-# Each image bakes in its demo configuration (policy bundle, policy registry,
-# service manifest, 403 page) from its ship directory: the compose kit mounts
-# named volumes only, never files from the repository.
+# Each demo image bakes in its demo configuration (the service's and the
+# console's manifests, the 403 page, the base policies) from its ship
+# directory: the compose kit mounts named volumes only, never files from the
+# repository. The demo service's policies are not baked in: the console
+# publishes them.
 release:
   demo/judge:
     kit: docker
@@ -13,14 +16,35 @@ release:
   demo/service:
     kit: docker
     mode: image
+  demo/console-guard:
+    kit: docker
+    mode: image
+  console/server:
+    kit: docker
+    mode: image
+  demo/builder:
+    kit: docker
+    mode: image
+  audit/server:
+    kit: docker
+    mode: image
 
 deploy:
-  # The one piece the stack does not own: the ingress network the gateway
-  # joins. `ens develop` creates it; a real deploy expects it to exist.
-  external:
-    edge:
-      type: network
-      name: edge
+  storage:
+    # Every guard's and judge's audit lines, which the audit server follows:
+    # the demo has no log shipper.
+    audit-lines:
+      type: volume
+    # The audit server's SQLite file.
+    audit-data:
+      type: volume
+    # The console's SQLite file: imported resources and the policy sources.
+    console-data:
+      type: volume
+    # The last sources the builder published, so judges get them back after
+    # a restart.
+    builder-state:
+      type: volume
 
   compute:
     # The protected service. Only the guard reaches it.
@@ -37,17 +61,23 @@ deploy:
           - app: fake-service
             path: /app
 
-    # Internal only: the gateway never routes to it, only the guard asks it.
+    # Internal only: the gateway never routes to it, only the guards ask it,
+    # the demo service's and the console's. It judges with what the builder
+    # last published: the base policies beneath what the console published.
     judge:
       type: container-orchestrated
       image: ${release.demo/judge}
       replicas: 1
       ports:
         http: 8081
+      mounts:
+        - source: ${storage.audit-lines.name}
+          path: /var/log/idhn
       env:
         JUDGE_PORT: "8081"
-        POLICY_BUNDLE_PATH: /config/policy.wasm
-        POLICY_REGISTRY_PATH: /config/policies.yaml
+        # URL spelled out: a ${compute.*} reference bakes to a bare port.
+        POLICY_SOURCE_URL: http://builder:8082
+        POLICY_POLL_MS: "1000"
       development:
         sync+restart:
           - app: judge/server
@@ -59,13 +89,102 @@ deploy:
       replicas: 1
       ports:
         http: 8080
+      mounts:
+        - source: ${storage.audit-lines.name}
+          path: /var/log/idhn
       env:
         PROXY_PORT: "8080"
         SERVICE_MANIFEST_PATH: /config/manifest.yaml
         REJECT_RESPONSE_URL: file:///config/forbidden.html
-        # URLs spelled out: a ${compute.*} reference bakes to a bare port.
         JUDGE_SERVER_URL: http://judge:8081
         UPSTREAM_URL: http://service:9100
+      development:
+        sync+restart:
+          - app: guard/standalone
+            path: /app
+
+    # Internal only: checks and compiles what the console uploads, with the
+    # base policies (who may use the console) beneath it, and serves it to
+    # the judge. It publishes the base alone at first.
+    builder:
+      type: container-orchestrated
+      image: ${release.demo/builder}
+      replicas: 1
+      ports:
+        http: 8082
+      mounts:
+        - source: ${storage.builder-state.name}
+          path: /var/lib/policy-builder
+      env:
+        BUILDER_PORT: "8082"
+        POLICY_SOURCE: upload
+        STATE_DIR: /var/lib/policy-builder
+        BASE_SOURCES_DIR: /config/base
+      development:
+        sync+restart:
+          - app: policy/builder
+            path: /app
+
+    # Internal only: keeps the audit lines it follows, and answers the
+    # console's audit queries.
+    audit:
+      type: container-orchestrated
+      image: ${release.audit/server}
+      replicas: 1
+      ports:
+        http: 8083
+      mounts:
+        - source: ${storage.audit-data.name}
+          path: /var/lib/idhn-audit
+        - source: ${storage.audit-lines.name}
+          path: /var/log/idhn
+          readOnly: true
+      env:
+        AUDIT_PORT: "8083"
+        AUDIT_DB_PATH: /var/lib/idhn-audit/audit.db
+        AUDIT_TAIL_PATH: /var/log/idhn/guard.jsonl,/var/log/idhn/judge.jsonl,/var/log/idhn/console-guard.jsonl
+      development:
+        sync+restart:
+          - app: audit/server
+            path: /app
+
+    # Only its guard reaches it.
+    console:
+      type: container-orchestrated
+      image: ${release.console/server}
+      replicas: 1
+      ports:
+        http: 8084
+      mounts:
+        - source: ${storage.console-data.name}
+          path: /var/lib/idhn-console
+      env:
+        CONSOLE_PORT: "8084"
+        CONSOLE_DB_PATH: /var/lib/idhn-console/console.db
+        POLICY_BUILDER_URL: http://builder:8082
+        AUDIT_URL: http://audit:8083
+      development:
+        # It reads the web app once, at start.
+        sync+restart:
+          - app: console/server
+            path: /app
+          - app: console/web
+            path: /app/web
+
+    console-guard:
+      type: container-orchestrated
+      image: ${release.demo/console-guard}
+      replicas: 1
+      ports:
+        http: 8080
+      mounts:
+        - source: ${storage.audit-lines.name}
+          path: /var/log/idhn
+      env:
+        PROXY_PORT: "8080"
+        SERVICE_MANIFEST_PATH: /config/manifest.yaml
+        JUDGE_SERVER_URL: http://judge:8081
+        UPSTREAM_URL: http://console:8084
       development:
         sync+restart:
           - app: guard/standalone
@@ -74,10 +193,14 @@ deploy:
   networking:
     gateway:
       type: gateway
-      network: ${external.edge.name}
       routes:
         - host: demo.localhost
           path: /*
           target:
             service: guard
             port: ${compute.guard.http}
+        - host: console.localhost
+          path: /*
+          target:
+            service: console-guard
+            port: ${compute.console-guard.http}

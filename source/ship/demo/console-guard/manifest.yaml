@@ -1,0 +1,44 @@
+# The console's actions (a copy of apps/console/server/manifest.yaml, kept in
+# step by its tests) for the demo, which has no auth server: no one signs in,
+# so it declares no authentication.
+id: console
+protocol: http
+
+actions:
+  # The web app itself: its page, at any path, and its assets.
+  - name: app.open
+    match: { method: GET, path: [/, '/*path'] }
+  # Reads.
+  - name: resources.list
+    match: { method: POST, path: /resources.list }
+  - name: policies.draft
+    match: { method: POST, path: /policies.draft }
+  - name: policies.check
+    match: { method: POST, path: /policies.check }
+  - name: policies.revisions
+    match: { method: POST, path: /policies.revisions }
+  - name: policies.revision
+    match: { method: POST, path: /policies.revision }
+  - name: audit.overview
+    match: { method: POST, path: /audit.overview }
+  - name: audit.trails
+    match: { method: POST, path: /audit.trails }
+  - name: audit.trail
+    match: { method: POST, path: /audit.trail }
+  # Changes.
+  - name: resources.import
+    match: { method: POST, path: /resources.import }
+  - name: resources.remove
+    match: { method: POST, path: /resources.remove }
+  - name: policies.write
+    match: { method: POST, path: /policies.write }
+  - name: policies.remove
+    match: { method: POST, path: /policies.remove }
+  - name: policies.associate
+    match: { method: POST, path: /policies.associate }
+  - name: policies.dissociate
+    match: { method: POST, path: /policies.dissociate }
+  - name: policies.restore
+    match: { method: POST, path: /policies.restore }
+  - name: policies.publish
+    match: { method: POST, path: /policies.publish }

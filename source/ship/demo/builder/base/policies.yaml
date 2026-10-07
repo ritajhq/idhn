@@ -1,0 +1,41 @@
+# The demo's base policies: the deployment's own, built beneath whatever the
+# console publishes, which can't change them. They govern every one of the
+# console's own actions, by console.operators. Kept in step with the console's
+# manifest by its tests.
+associations:
+  console.idhn.manifest.read:
+    - console.operators
+  console.app.open:
+    - console.operators
+  console.resources.list:
+    - console.operators
+  console.policies.draft:
+    - console.operators
+  console.policies.check:
+    - console.operators
+  console.policies.revisions:
+    - console.operators
+  console.policies.revision:
+    - console.operators
+  console.audit.overview:
+    - console.operators
+  console.audit.trails:
+    - console.operators
+  console.audit.trail:
+    - console.operators
+  console.resources.import:
+    - console.operators
+  console.resources.remove:
+    - console.operators
+  console.policies.write:
+    - console.operators
+  console.policies.remove:
+    - console.operators
+  console.policies.associate:
+    - console.operators
+  console.policies.dissociate:
+    - console.operators
+  console.policies.restore:
+    - console.operators
+  console.policies.publish:
+    - console.operators

@@ -1,0 +1,7 @@
+# Which policies govern which actions. An action no policy governs is always
+# denied.
+associations:
+  demo.home.visit:
+    - demo.home.visit
+  demo.idhn.manifest.read:
+    - demo.stewards

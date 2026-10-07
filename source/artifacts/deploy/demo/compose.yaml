@@ -1,36 +1,101 @@
 services:
+  audit:
+    image: 'audit/server:latest'
+    environment:
+      AUDIT_PORT: '8083'
+      AUDIT_DB_PATH: /var/lib/idhn-audit/audit.db
+      AUDIT_TAIL_PATH: >-
+        /var/log/idhn/guard.jsonl,/var/log/idhn/judge.jsonl,/var/log/idhn/console-guard.jsonl
+    volumes:
+      - 'audit-data:/var/lib/idhn-audit'
+      - 'audit-lines:/var/log/idhn:ro'
+    develop:
+      watch:
+        - path: audit/server
+          target: /app
+          action: sync+restart
+          initial_sync: true
+  builder:
+    image: 'demo/builder:latest'
+    environment:
+      BUILDER_PORT: '8082'
+      POLICY_SOURCE: upload
+      STATE_DIR: /var/lib/policy-builder
+      BASE_SOURCES_DIR: /config/base
+    volumes:
+      - 'builder-state:/var/lib/policy-builder'
+    develop:
+      watch:
+        - path: policy/builder
+          target: /app
+          action: sync+restart
+          initial_sync: true
+  console:
+    image: 'console/server:latest'
+    environment:
+      CONSOLE_PORT: '8084'
+      CONSOLE_DB_PATH: /var/lib/idhn-console/console.db
+      POLICY_BUILDER_URL: 'http://builder:8082'
+      AUDIT_URL: 'http://audit:8083'
+    volumes:
+      - 'console-data:/var/lib/idhn-console'
+    develop:
+      watch:
+        - path: console/server
+          target: /app
+          action: sync+restart
+          initial_sync: true
+        - path: console/web
+          target: /app/web
+          action: sync+restart
+          initial_sync: true
+  console-guard:
+    image: 'demo/console-guard:latest'
+    environment:
+      PROXY_PORT: '8080'
+      SERVICE_MANIFEST_PATH: /config/manifest.yaml
+      JUDGE_SERVER_URL: 'http://judge:8081'
+      UPSTREAM_URL: 'http://console:8084'
+    volumes:
+      - 'audit-lines:/var/log/idhn'
+    develop:
+      watch:
+        - path: guard/standalone
+          target: /app
+          action: sync+restart
+          initial_sync: true
   guard:
     image: 'demo/guard:latest'
-    ports:
-      - '8080'
     environment:
       PROXY_PORT: '8080'
       SERVICE_MANIFEST_PATH: /config/manifest.yaml
       REJECT_RESPONSE_URL: 'file:///config/forbidden.html'
       JUDGE_SERVER_URL: 'http://judge:8081'
       UPSTREAM_URL: 'http://service:9100'
+    volumes:
+      - 'audit-lines:/var/log/idhn'
     develop:
       watch:
         - path: guard/standalone
           target: /app
           action: sync+restart
+          initial_sync: true
   judge:
     image: 'demo/judge:latest'
-    ports:
-      - '8081'
     environment:
       JUDGE_PORT: '8081'
-      POLICY_BUNDLE_PATH: /config/policy.wasm
-      POLICY_REGISTRY_PATH: /config/policies.yaml
+      POLICY_SOURCE_URL: 'http://builder:8082'
+      POLICY_POLL_MS: '1000'
+    volumes:
+      - 'audit-lines:/var/log/idhn'
     develop:
       watch:
         - path: judge/server
           target: /app
           action: sync+restart
+          initial_sync: true
   service:
     image: 'demo/service:latest'
-    ports:
-      - '9100'
     environment:
       PORT: '9100'
     develop:
@@ -38,12 +103,12 @@ services:
         - path: fake-service
           target: /app
           action: sync+restart
+          initial_sync: true
   gateway:
     image: 'caddy:2.11-alpine'
     ports:
       - '80:80'
     networks:
-      - edge
       - default
     configs:
       - source: gateway-caddyfile
@@ -51,12 +116,14 @@ services:
     volumes:
       - 'gateway-data:/data'
     depends_on:
+      - console-guard
       - guard
 volumes:
+  audit-data: {}
+  audit-lines: {}
+  builder-state: {}
+  console-data: {}
   gateway-data: {}
-networks:
-  edge:
-    external: true
 configs:
   gateway-caddyfile:
-    content: "http://demo.localhost {\n\thandle /* {\n\t\treverse_proxy http://guard:8080\n\t}\n}\n"
+    content: "http://demo.localhost {\n\thandle /* {\n\t\treverse_proxy http://guard:8080\n\t}\n}\n\nhttp://console.localhost {\n\thandle /* {\n\t\treverse_proxy http://console-guard:8080\n\t}\n}\n"
