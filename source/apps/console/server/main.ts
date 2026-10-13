@@ -10,7 +10,7 @@ import * as MUX from '@ritaj/mux'
 import { Client as HttpCourier } from '@ritaj/mux/client/http'
 import { Server as HttpTransport } from '@ritaj/mux/server/http'
 import { ConfigLoader } from './config.ts'
-import { AuditRelay, PolicyDesk, ResourceDesk } from './desks.ts'
+import { AuditRelay, LookupDesk, PolicyDesk, ResourceDesk } from './desks.ts'
 import { Server, WebApp } from './server.ts'
 
 const config = new ConfigLoader(
@@ -33,6 +33,7 @@ new PolicyDesk(
   workspace,
   new Authoring.Publishing(workspace, new Authoring.Builder(config.builderUrl)),
 ).serve(resolvers, handlers)
+new LookupDesk(workspace).serve(handlers)
 new AuditRelay(
   new Horizon.Client(new HttpCourier(config.auditUrl.href.replace(/\/$/, '')), {
     timeout: 30_000,

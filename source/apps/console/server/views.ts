@@ -42,12 +42,18 @@ export function draftView(draft: Authoring.Draft): Contract.Policies.DraftView {
       source: policy.source,
       ...(policy.tests === undefined ? {} : { tests: policy.tests }),
       governs: draft.governedBy(policy.name.toString()),
+      lookups: draft.providing(policy.name.toString()),
     })),
     associations: Object.fromEntries(
       Object.entries(document.associations).map((
         [action, policies],
       ) => [action, [...policies]]),
     ),
+    lookups: draft.allLookups.map((lookup) => ({
+      ...lookup.toDocument(),
+      providesTo: draft.providedTo(lookup.name),
+      madeFor: draft.madeFor(lookup.name),
+    })),
   }
 }
 

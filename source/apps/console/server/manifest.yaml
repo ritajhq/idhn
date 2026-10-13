@@ -46,3 +46,11 @@ actions:
     match: { method: POST, path: /policies.restore }
   - name: policies.publish
     match: { method: POST, path: /policies.publish }
+  - name: lookups.write
+    match: { method: POST, path: /lookups.write }
+  - name: lookups.remove
+    match: { method: POST, path: /lookups.remove }
+  - name: lookups.provide
+    match: { method: POST, path: /lookups.provide }
+  - name: lookups.withdraw
+    match: { method: POST, path: /lookups.withdraw }

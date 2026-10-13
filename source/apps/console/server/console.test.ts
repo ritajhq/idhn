@@ -26,7 +26,7 @@ import { UploadIntake } from '../../policy/builder/intake.ts'
 import { Opa } from '../../policy/builder/opa.ts'
 import { Server as BuilderServer } from '../../policy/builder/server.ts'
 import { Upload } from '../../policy/builder/sources/upload.ts'
-import { AuditRelay, PolicyDesk, ResourceDesk } from './desks.ts'
+import { AuditRelay, LookupDesk, PolicyDesk, ResourceDesk } from './desks.ts'
 import { Server, WebApp } from './server.ts'
 
 const BUNDLE = new URL(
@@ -142,6 +142,7 @@ async function withConsole(
     resolvers,
     handlers,
   )
+  new LookupDesk(workspace).serve(handlers)
   new AuditRelay(new Horizon.Client(new HttpCourier(audit), { timeout: 2000 }))
     .serve(resolvers)
   const transport = new HttpTransport(
@@ -316,6 +317,74 @@ Deno.test('console: checks the draft with the builder, then publishes it for jud
   })
 })
 
+Deno.test('console: lookups provide their facts to policies, and are published made for every action those govern', async () => {
+  await withConsole(async (as, { publication }) => {
+    const ada = as('admin')
+    let draft = await ada.Issue(new Contract.Policies.Write(0, POLICY, TESTS))
+    draft = await ada.Issue(
+      new Contract.Policies.Associate(
+        draft.revision,
+        'directory.members.list',
+        'directory.members',
+      ),
+    )
+    const invalid = await ada.Attempt(
+      new Contract.Lookups.Write(draft.revision, {
+        name: 'auth',
+        url: 'http://teams:4000/{auth.subject}',
+        ttlSeconds: 0,
+        optional: false,
+      }),
+    )
+    assertEquals(
+      !invalid.ok && invalid.fault instanceof Contract.Rejected &&
+        invalid.fault.Reason,
+      'invalid_lookup',
+    )
+    draft = await ada.Issue(
+      new Contract.Lookups.Write(draft.revision, {
+        name: 'teams',
+        url: 'http://teams:4000/{auth.subject}',
+        ttlSeconds: 5,
+        optional: true,
+      }),
+    )
+    draft = await ada.Issue(
+      new Contract.Lookups.Provide(
+        draft.revision,
+        'teams',
+        'directory.members',
+      ),
+    )
+    assertEquals(draft.lookups[0].madeFor, ['directory.members.list'])
+    assertEquals(draft.policies[0].lookups, ['teams'])
+
+    const providing = await ada.Attempt(
+      new Contract.Lookups.Remove(draft.revision, 'teams'),
+    )
+    assertEquals(
+      !providing.ok && providing.fault instanceof Contract.Rejected &&
+        [providing.fault.Reason, providing.fault.Details],
+      ['still_providing', ['directory.members']],
+    )
+
+    await ada.Issue(new Contract.Policies.Publish())
+    assertEquals(
+      parseYaml(publication.current?.enrichment ?? ''),
+      {
+        lookups: [{
+          as: 'teams',
+          actions: ['directory.members.list'],
+          http: { url: 'http://teams:4000/{auth.subject}' },
+          ttl_seconds: 5,
+          optional: true,
+          provides_to: ['directory.members'],
+        }],
+      },
+    )
+  })
+})
+
 Deno.test('console: relays the audit, answering from the audit server', async () => {
   await withConsole(async (as, { audit }) => {
     const timestamp = '2026-10-06T10:00:00.000Z'
@@ -352,7 +421,12 @@ Deno.test('console manifest: names every call the console answers, so its guard 
       name !== 'app.open'
     ),
   )
-  const answered = [Contract.Resources, Contract.Policies, Contract.Audit]
+  const answered = [
+    Contract.Resources,
+    Contract.Policies,
+    Contract.Lookups,
+    Contract.Audit,
+  ]
     .flatMap((area) => Object.values(area))
     .filter((value): value is new () => MUX.Packet =>
       typeof value === 'function' && value.prototype instanceof Horizon.Message

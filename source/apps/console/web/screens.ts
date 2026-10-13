@@ -3,7 +3,12 @@ import type { IconName } from '@ritaj/ui'
 /** What is guarded and who may do what, then what happened: two groups, kept apart in the sidebar. */
 export type Group = 'authorization' | 'observability'
 
-export type ScreenId = 'resources' | 'policies' | 'associations' | 'audit'
+export type ScreenId =
+  | 'resources'
+  | 'policies'
+  | 'associations'
+  | 'lookups'
+  | 'audit'
 
 export interface Screen {
   readonly id: ScreenId
@@ -33,6 +38,13 @@ export const SCREENS: readonly Screen[] = [
     label: 'Associations',
     description: "Which policies govern each of a resource's actions",
     icon: 'link',
+    group: 'authorization',
+  },
+  {
+    id: 'lookups',
+    label: 'Lookups',
+    description: 'Live facts judges look up for the policies that need them',
+    icon: 'search',
     group: 'authorization',
   },
   {

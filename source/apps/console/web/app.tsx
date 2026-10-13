@@ -28,6 +28,7 @@ import { useDraft } from './draft.ts'
 import { Notice } from './components/notice.tsx'
 import { GROUPS, type Screen, ScreenOf, SCREENS } from './screens.ts'
 import { Associations } from './screens/associations.tsx'
+import { Lookups } from './screens/lookups.tsx'
 import { Audit } from './screens/audit.tsx'
 import { Policies } from './screens/policies.tsx'
 import { Resources } from './screens/resources.tsx'
@@ -50,7 +51,7 @@ export function App() {
   const [refresh, setRefresh] = useState(0)
   const [signedOut, setSignedOut] = useState(false)
   const [palette, setPalette] = useState(false)
-  // Policies and associations both change the one draft.
+  // Policies, associations and lookups all change the one draft.
   const draft = useDraft(refresh)
 
   useEffect(() => {
@@ -86,6 +87,7 @@ export function App() {
             {screen.id === 'associations' && (
               <Associations refresh={refresh} state={draft} />
             )}
+            {screen.id === 'lookups' && <Lookups state={draft} />}
             {screen.id === 'audit' && <Audit refresh={refresh} />}
           </main>
         </SidebarInset>

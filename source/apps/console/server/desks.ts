@@ -135,6 +135,52 @@ export class PolicyDesk {
 }
 
 /**
+ * The lookups: the facts judges look up before evaluating, written into the
+ * same draft as the policies, each providing its fact to policies — and so
+ * made for every action they govern.
+ */
+export class LookupDesk {
+  constructor(private readonly workspace: Authoring.Workspace) {}
+
+  serve(handlers: Horizon.Handlers): void {
+    handlers
+      .Use(Contract.Lookups.Write, {
+        Handle: (call) =>
+          this.edit(call, (draft) =>
+            draft.writeLookup(
+              Authoring.Lookup.write({
+                name: call.Name,
+                url: call.Url,
+                ttlSeconds: call.TtlSeconds,
+                timeoutMs: call.TimeoutMs,
+                optional: call.Optional,
+              }),
+              call.Replacing,
+            )),
+      })
+      .Use(Contract.Lookups.Remove, {
+        Handle: (call) =>
+          this.edit(call, (draft) => draft.removeLookup(call.Name)),
+      })
+      .Use(Contract.Lookups.Provide, {
+        Handle: (call) =>
+          this.edit(call, (draft) => draft.provide(call.Lookup, call.Policy)),
+      })
+      .Use(Contract.Lookups.Withdraw, {
+        Handle: (call) =>
+          this.edit(call, (draft) => draft.withdraw(call.Lookup, call.Policy)),
+      })
+  }
+
+  private edit(
+    call: { BasedOn: number },
+    change: (draft: Authoring.Draft) => void,
+  ): Promise<Contract.Policies.DraftView> {
+    return refusing(() => draftView(this.workspace.edit(call.BasedOn, change)))
+  }
+}
+
+/**
  * The audit: every audit query passed on to the audit server as asked, and
  * its answer, or fault, passed back.
  */

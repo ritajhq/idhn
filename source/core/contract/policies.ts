@@ -1,5 +1,7 @@
 import * as Horizon from '@ritaj/horizon'
 import type { Rejected, Stale } from './faults.ts'
+import { Change } from './change.ts'
+import type { LookupView } from './lookups.ts'
 
 export interface PolicyView {
   name: string
@@ -7,6 +9,8 @@ export interface PolicyView {
   tests?: string
   /** The actions it governs. */
   governs: string[]
+  /** The lookups providing it their facts. */
+  lookups: string[]
 }
 
 /** The policy sources being worked on. */
@@ -15,6 +19,7 @@ export interface DraftView {
   policies: PolicyView[]
   /** Action → the policies governing it. */
   associations: Record<string, string[]>
+  lookups: LookupView[]
 }
 
 export interface RevisionView {
@@ -29,20 +34,6 @@ export interface RevisionView {
 
 /** The draft. */
 export class Draft extends Horizon.Query<DraftView> {}
-
-/** A change to the draft, made only if it is still at revision `basedOn`. */
-class Change extends Horizon.Action<DraftView, Rejected | Stale> {
-  private readonly basedOn = this.c.Number(0, 'policies.based_on')
-
-  constructor(basedOn = 0) {
-    super()
-    this.basedOn.Write(basedOn)
-  }
-
-  get BasedOn(): number {
-    return this.basedOn.Read()
-  }
-}
 
 /** Writes a policy, new or changed; in place of `replacing` when its package was renamed. */
 export class Write extends Change {

@@ -1,0 +1,15 @@
+{
+  "name": "@idhn/console-seed",
+  "exports": "./main.ts",
+  "imports": {
+    "@std/path": "jsr:@std/path@1.1.6",
+    "@std/yaml": "jsr:@std/yaml@1.1.2",
+    "@ritaj/horizon": "jsr:@ritaj/horizon",
+    "@ritaj/mux": "jsr:@ritaj/mux"
+  },
+  "fmt": {
+    "semiColons": false,
+    "singleQuote": true,
+    "trailingCommas": "onlyMultiLine"
+  }
+}

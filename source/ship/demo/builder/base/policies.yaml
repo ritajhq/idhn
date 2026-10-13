@@ -39,3 +39,11 @@ associations:
     - console.operators
   console.policies.publish:
     - console.operators
+  console.lookups.write:
+    - console.operators
+  console.lookups.remove:
+    - console.operators
+  console.lookups.provide:
+    - console.operators
+  console.lookups.withdraw:
+    - console.operators

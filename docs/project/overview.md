@@ -697,6 +697,13 @@ posted to its own name (`POST /policies.write`), which the server answers
   (`POST /checks`); publishing uploads the tree (`PUT /sources`), and records it
   as the next revision (`r1`, `r2`, …), which can be restored into the draft.
   The builder must run in `upload` mode.
+- **Lookups** (`@idhn/authoring`): the enrichment lookups are authored in the
+  same draft. A lookup provides its fact to policies, not to actions: it is
+  made for every action those policies govern, worked out when the draft
+  becomes `enrichment.yaml`, so associating an action with a policy brings
+  the lookups it needs along. The file also records each lookup's
+  `provides_to`, which judges ignore, so a restored revision is authored as
+  it was.
 - **Audit**: queries are passed on to `audit/server` as asked.
 
 The console keeps its state in one SQLite file. It must sit behind an idhn

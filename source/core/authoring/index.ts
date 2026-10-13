@@ -1,8 +1,11 @@
 export { InvalidPolicyError, Policy } from './policy.ts'
+export { InvalidLookupError, Lookup, type LookupDocument } from './lookup.ts'
 export {
   Draft,
   type DraftDocument,
   StillGoverningError,
+  StillProvidingError,
+  UnknownLookupError,
   UnknownPolicyError,
 } from './draft.ts'
 export { Revision } from './revision.ts'

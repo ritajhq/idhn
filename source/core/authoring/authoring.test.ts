@@ -5,15 +5,20 @@ import {
   Builder,
   BuilderUnavailableError,
   Draft,
+  InvalidLookupError,
   InvalidPolicyError,
+  Lookup,
   Policy,
   Publishing,
   RefusedError,
   StaleDraftError,
   StillGoverningError,
+  StillProvidingError,
+  UnknownLookupError,
   UnknownPolicyError,
   Workspace,
 } from './index.ts'
+import { parse as parseYaml } from '@std/yaml'
 
 const ADMIN =
   'package shop.admin\n\nallow if input.auth.claims.role == "admin"\n'
@@ -88,6 +93,131 @@ Deno.test('Draft: is the source tree the builder takes, and restores from one', 
   restored.restore(files)
   assertEquals(restored.files(), files)
   assertEquals(Draft.fromDocument(restored.toDocument()).files(), files)
+})
+
+const MANAGED = Lookup.write({
+  name: 'managed',
+  url: 'http://shop:4000/managers/{auth.subject}',
+  ttlSeconds: 5,
+  optional: true,
+})
+
+Deno.test('Lookup: is named for the fact policies read, and asks a URL', () => {
+  assertEquals(MANAGED.toDocument(), {
+    name: 'managed',
+    url: 'http://shop:4000/managers/{auth.subject}',
+    ttlSeconds: 5,
+    optional: true,
+  })
+  for (
+    const invalid of [
+      { name: 'managed places', url: 'http://x' },
+      { name: 'auth', url: 'http://x' },
+      { name: 'managed', url: ' ' },
+      { name: 'managed', url: 'http://x', ttlSeconds: -1 },
+      { name: 'managed', url: 'http://x', timeoutMs: 0 },
+    ]
+  ) assertThrows(() => Lookup.write(invalid), InvalidLookupError)
+})
+
+Deno.test('Draft: a lookup is made for every action the policies it provides to govern', () => {
+  const draft = Draft.empty()
+  draft.write(Policy.write(ADMIN))
+  draft.write(Policy.write(PUBLIC))
+  draft.associate('shop.orders.list', 'shop.admin')
+  draft.associate('shop.orders.cancel', 'shop.admin')
+  draft.associate('shop.browse', 'shop.public')
+  draft.writeLookup(MANAGED)
+  draft.provide('managed', 'shop.admin')
+
+  assertEquals(draft.madeFor('managed'), [
+    'shop.orders.cancel',
+    'shop.orders.list',
+  ])
+  // Governing one more action brings the lookup along.
+  draft.associate('shop.orders.refund', 'shop.admin')
+  assertEquals(draft.madeFor('managed').length, 3)
+  assertEquals(draft.providing('shop.admin'), ['managed'])
+  assertThrows(() => draft.provide('missing', 'shop.admin'), UnknownLookupError)
+  assertThrows(() => draft.provide('managed', 'shop.x'), UnknownPolicyError)
+
+  const refused = assertThrows(
+    () => draft.removeLookup('managed'),
+    StillProvidingError,
+  )
+  assertEquals(refused.policies, ['shop.admin'])
+  draft.withdraw('managed', 'shop.admin')
+  // Provided to no one, it is made for no action — never for every one.
+  assertEquals(draft.madeFor('managed'), [])
+  const { lookups } = parseYaml(draft.files()['enrichment.yaml']) as {
+    lookups: { actions: string[] }[]
+  }
+  assertEquals(lookups[0].actions, [])
+  draft.removeLookup('managed')
+  assertEquals(draft.files()['enrichment.yaml'], undefined)
+})
+
+Deno.test('Draft: renaming a policy or a lookup keeps what it provided to', () => {
+  const draft = Draft.empty()
+  draft.write(Policy.write(ADMIN))
+  draft.associate('shop.orders.list', 'shop.admin')
+  draft.writeLookup(MANAGED)
+  draft.provide('managed', 'shop.admin')
+
+  draft.write(
+    Policy.write(ADMIN.replace('shop.admin', 'shop.owner')),
+    'shop.admin',
+  )
+  assertEquals(draft.providedTo('managed'), ['shop.owner'])
+
+  draft.writeLookup(
+    Lookup.write({ name: 'owned', url: MANAGED.url }),
+    'managed',
+  )
+  assertEquals(draft.allLookups.map((lookup) => lookup.name), ['owned'])
+  assertEquals(draft.madeFor('owned'), ['shop.orders.list'])
+})
+
+Deno.test('Draft: writes its lookups as enrichment.yaml, and restores them from it', () => {
+  const draft = Draft.empty()
+  draft.write(Policy.write(ADMIN))
+  draft.associate('shop.orders.list', 'shop.admin')
+  draft.writeLookup(MANAGED)
+  draft.provide('managed', 'shop.admin')
+  const files = draft.files()
+
+  assertEquals(parseYaml(files['enrichment.yaml']), {
+    lookups: [{
+      as: 'managed',
+      actions: ['shop.orders.list'],
+      http: { url: 'http://shop:4000/managers/{auth.subject}' },
+      ttl_seconds: 5,
+      optional: true,
+      provides_to: ['shop.admin'],
+    }],
+  })
+
+  const restored = Draft.empty()
+  restored.restore(files)
+  assertEquals(restored.files(), files)
+  assertEquals(Draft.fromDocument(restored.toDocument()).files(), files)
+})
+
+Deno.test('Draft: one saved while enrichment.yaml was kept as is takes up its lookups', () => {
+  const draft = Draft.fromDocument({
+    revision: 3,
+    policies: [{ source: ADMIN }],
+    associations: { 'shop.orders.list': ['shop.admin'] },
+    keptAsIs: {
+      'enrichment.yaml':
+        'lookups:\n  - as: managed\n    actions: [shop.orders.list]\n    http:\n      url: http://shop:4000/managers/{auth.subject}\n',
+    },
+  })
+
+  // Written by hand, it says no one it provides to: until told, it is made for nothing.
+  assertEquals(draft.allLookups.map((lookup) => lookup.name), ['managed'])
+  assertEquals(draft.providedTo('managed'), [])
+  assertEquals(draft.toDocument().keptAsIs, {})
 })
 
 Deno.test('Workspace: each edit is a new revision, and an edit on a stale one is refused', () => {

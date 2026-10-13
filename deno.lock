@@ -1213,6 +1213,14 @@
           "jsr:@std/path@1.1.6"
         ]
       },
+      "source/apps/console/seed": {
+        "dependencies": [
+          "jsr:@ritaj/horizon@*",
+          "jsr:@ritaj/mux@*",
+          "jsr:@std/path@1.1.6",
+          "jsr:@std/yaml@1.1.2"
+        ]
+      },
       "source/apps/console/server": {
         "dependencies": [
           "jsr:@ritaj/horizon@*",

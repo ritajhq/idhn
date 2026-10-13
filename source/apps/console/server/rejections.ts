@@ -9,6 +9,9 @@ const REASONS: readonly [ErrorClass, Contract.Reason][] = [
   [Authoring.InvalidPolicyError, 'invalid_policy'],
   [Authoring.UnknownPolicyError, 'unknown_policy'],
   [Authoring.StillGoverningError, 'still_governing'],
+  [Authoring.InvalidLookupError, 'invalid_lookup'],
+  [Authoring.UnknownLookupError, 'unknown_lookup'],
+  [Authoring.StillProvidingError, 'still_providing'],
   [Authoring.UnknownRevisionError, 'unknown_revision'],
   [Authoring.RefusedError, 'does_not_build'],
   [Authoring.BuilderUnavailableError, 'builder_unavailable'],
@@ -50,6 +53,7 @@ export function asFault(error: unknown): unknown {
 function detailsOf(error: unknown): readonly string[] {
   if (error instanceof Authoring.RefusedError) return error.problems
   if (error instanceof Authoring.StillGoverningError) return error.actions
+  if (error instanceof Authoring.StillProvidingError) return error.policies
   return []
 }
 

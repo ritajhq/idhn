@@ -19,7 +19,7 @@ the stack's internal network.
 
 ```sh
 ens develop demo              # build, pack and run it, syncing app changes into the containers
-deno run -A ci/demo/seed.ts   # once: publish the demo service's first policies through the console
+deno run -A source/apps/console/seed/main.ts http://console.localhost ci/demo/policies   # once: publish the demo service's first policies through the console
 ```
 
 `ens develop` rebuilds an app when its source changes and restarts its container
@@ -65,7 +65,7 @@ no subjects.
 | `source/ship/demo/guard/forbidden.html`        | The 403 page                                                 |
 | `source/ship/demo/console-guard/manifest.yaml` | The console's actions, without authentication                |
 | `source/ship/demo/builder/base/`               | The base policies: anyone may use the console                |
-| `ci/demo/policies/`                            | The demo service's first policies, which `seed.ts` publishes |
+| `ci/demo/policies/`                            | The demo service's first policies, which the seed publishes |
 
 The guards and the judge write their audit lines to stdout, as always, and to
 the `audit-lines` volume too, which the audit server follows: the demo has no
