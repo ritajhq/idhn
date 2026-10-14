@@ -28,8 +28,17 @@ const REWRITTEN_BODY_HEADERS = ['content-length', 'content-encoding', 'etag']
  * back off this instance after `Guard.execute()` resolves — the promise
  * itself is the sole channel back, matching what `ServiceProvider`'s
  * `Promise<void>` methods already promise (nothing).
+ *
+ * The caller's `Host` reaches the upstream as the caller sent it, as from
+ * any reverse proxy: an upstream that routes by host (a gateway, a router
+ * fronting several deployments) needs the name it was asked for, not its
+ * own address. Deno's `fetch` replaces a `Host` header with the URL's own
+ * unless its client allows it.
  */
 export class HttpServiceProvider implements ServiceProvider {
+  /** Shared by every request: one connection pool to the upstream, created once. */
+  private static readonly client = Deno.createHttpClient({ allowHost: true })
+
   constructor(
     private readonly request: Request,
     private readonly upstream: URL,
@@ -50,6 +59,7 @@ export class HttpServiceProvider implements ServiceProvider {
       headers: new CallerHeaders().describe(this.request.headers, identity),
       body: this.request.body,
       redirect: 'manual',
+      client: HttpServiceProvider.client,
     }).catch((error: unknown) => {
       throw new ServiceUnreachableError(
         `Service at ${this.upstream.origin} could not be reached`,

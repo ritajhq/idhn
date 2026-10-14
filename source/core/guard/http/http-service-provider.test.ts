@@ -61,6 +61,34 @@ Deno.test('HttpServiceProvider.forward: proxies the request to the upstream and 
   )
 })
 
+Deno.test('HttpServiceProvider.forward: the upstream is asked for the host the caller asked for, so one that routes by host still can', async () => {
+  await withUpstream(
+    (request) => new Response(request.headers.get('host')),
+    async (upstream) => {
+      const { promise, resolve } = Promise.withResolvers<Response>()
+      const request = new Request('https://gateway.test/', {
+        headers: { host: 'dashboard--feat-x.example.com' },
+      })
+      const provider = new HttpServiceProvider(
+        request,
+        upstream,
+        resolve,
+        new Bare(),
+      )
+
+      await provider.forward(
+        Access.Identity.anonymous(),
+        Disclosure.Disclosure.none,
+      )
+
+      assertEquals(
+        await (await promise).text(),
+        'dashboard--feat-x.example.com',
+      )
+    },
+  )
+})
+
 Deno.test('HttpServiceProvider.forward: relays the upstream body', async () => {
   await withUpstream(
     async (request) => new Response(await request.text(), { status: 201 }),
