@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ritajhq/ensemble/refs/heads/main/docs/delivery.schema.json
+version: v1
+
+# idhn's own images, published with every release for others to build on:
+# a service's guard (FROM guard-standalone, its manifest baked in), the judge
+# its guards ask, and the policy builder (FROM policy-builder, its base
+# policies baked in). Pushing needs docker logged in to ghcr.io with a token
+# that may write packages.
+release:
+  guard/standalone:
+    kit: docker
+    mode: image
+    publish:
+      target: push
+      name: ghcr.io/ritajhq/idhn/guard-standalone
+  judge/server:
+    kit: docker
+    mode: image
+    publish:
+      target: push
+      name: ghcr.io/ritajhq/idhn/judge-server
+  policy/builder:
+    kit: docker
+    mode: image
+    publish:
+      target: push
+      name: ghcr.io/ritajhq/idhn/policy-builder
