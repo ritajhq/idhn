@@ -19,15 +19,25 @@ release:
   demo/console-guard:
     kit: docker
     mode: image
+  # The policy console, published with every release for whoever runs idhn
+  # to deploy beside their guards.
   console/server:
     kit: docker
     mode: image
+    publish:
+      target: push
+      name: ghcr.io/ritajhq/idhn/console-server
   demo/builder:
     kit: docker
     mode: image
+  # The audit server, published with every release for whoever runs idhn to
+  # follow their guards' and judges' audit lines.
   audit/server:
     kit: docker
     mode: image
+    publish:
+      target: push
+      name: ghcr.io/ritajhq/idhn/audit-server
 
 deploy:
   storage:
