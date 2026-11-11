@@ -1,7 +1,0 @@
-{
-  "name": "@ritaj/storage",
-  "exports": "./index.ts",
-  "imports": {
-    "@ritaj/event": "jsr:@ritaj/event"
-  }
-}

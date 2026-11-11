@@ -2,7 +2,7 @@ import { Courier } from '../courier.ts'
 import { Packet } from '../packet.ts'
 import { Failed, Forbidden, Returned, Unauthenticated, Unavailable, Unreachable } from '../returned.ts'
 
-import * as Storage from '@ritaj/storage'
+import * as Storage from '../../storage/index.ts'
 
 /** How the HTTP answer to an undelivered packet is stamped when it is returned; any other failing status is `Failed`. */
 const RETURNED_FOR_STATUS: Readonly<Record<number, new (packet: Packet) => Returned>> = {

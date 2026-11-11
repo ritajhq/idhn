@@ -8,8 +8,8 @@ import { Envelope } from '../envelope.ts'
 import { HalfDuplex, Packet } from '../packet.ts'
 import { Returned } from '../returned.ts'
 
-import * as Storage from '@ritaj/storage'
-import * as Event from '@ritaj/event'
+import * as Storage from '../../storage/index.ts'
+import * as Event from '../../event/index.ts'
 
 type PromiseResolve = (
   value: APIGatewayProxyResultV2 | PromiseLike<APIGatewayProxyResultV2>

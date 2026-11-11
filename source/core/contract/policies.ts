@@ -1,4 +1,4 @@
-import * as Horizon from '@ritaj/horizon'
+import * as Horizon from '@ritaj/coding/horizon'
 import type { Rejected, Stale } from './faults.ts'
 import { Change } from './change.ts'
 import type { LookupView } from './lookups.ts'

@@ -1,4 +1,4 @@
-import type { Server as HttpTransport } from '@ritaj/mux/server/http'
+import type { Server as HttpTransport } from '@ritaj/coding/mux/server/http'
 
 /** The built web app's files, each with its type. */
 const ASSETS: Readonly<Record<string, string>> = {

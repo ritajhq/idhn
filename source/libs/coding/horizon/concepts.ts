@@ -1,5 +1,5 @@
-import * as MUX from '@ritaj/mux'
-import * as Storage from '@ritaj/storage'
+import * as MUX from '../mux/index.ts'
+import * as Storage from '../storage/index.ts'
 
 import { Fault, Unhandled } from './fault.ts'
 
@@ -104,7 +104,7 @@ export abstract class Message<R extends DataStructure = any, F extends Fault = n
 export class Query<out T extends DataStructure = any, F extends Fault = never> extends Message<T, F> {
   private readonly result: Storage.Primitive<Answered<unknown>> = this.c.Object<Answered<unknown>>({}, 'query.result')
 
-  async Execute(r: Resolver<this>) {
+  async Execute(r: Resolver<this>): Promise<T> {
     const d = await r.Resolve(this)
     return d as T
   }
@@ -147,7 +147,7 @@ export class Action<R extends DataStructure = undefined, F extends Fault = never
   private readonly nonce = this.c.String(correlationId(), 'action.nonce')
   private readonly result: Storage.Primitive<Answered<unknown>> = this.c.Object<Answered<unknown>>({}, 'action.result')
 
-  async Execute(h: Handler<this>) {
+  async Execute(h: Handler<this>): Promise<R> {
     return (await h.Handle(this)) as R
   }
 
@@ -207,7 +207,7 @@ export class AsyncQuery<T extends DataStructure = any, F extends Fault = never> 
   )
   private readonly handle = this.c.String('', 'query.async.handle')
 
-  get Status() {
+  get Status(): AsyncStatus {
     return this.status.Read() as AsyncStatus
   }
 
@@ -234,7 +234,7 @@ export class AsyncQuery<T extends DataStructure = any, F extends Fault = never> 
     return this.handle.Read() !== ''
   }
 
-  get Handle() {
+  get Handle(): string {
     return this.handle.Read()
   }
 
@@ -277,7 +277,7 @@ MUX.Packet.Register(Action, '/horizon.action')
 
 export class Resolvers implements Resolver {
   constructor(
-    readonly registry = new Map<Constructor<Query<any, any>>, Resolver<any>>()
+    readonly registry: Map<Constructor<Query<any, any>>, Resolver<any>> = new Map()
   ) {}
 
   // Queries declaring faults (`Query<T, F>`) are resolved like any other.
@@ -304,7 +304,7 @@ export class Resolvers implements Resolver {
 
 export class Handlers implements Handler {
   constructor(
-    readonly registry = new Map<Constructor<Action<any, any>>, Handler>()
+    readonly registry: Map<Constructor<Action<any, any>>, Handler> = new Map()
   ) {}
 
   Use<A extends Action<any, any>>(a: Constructor<A>, h: Handler<A>): this {

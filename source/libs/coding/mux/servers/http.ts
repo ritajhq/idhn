@@ -3,7 +3,7 @@ import { Envelope } from '../envelope.ts'
 import { Duplex, Packet } from '../packet.ts'
 import { Returned } from '../returned.ts'
 
-import * as Storage from '@ritaj/storage'
+import * as Storage from '../../storage/index.ts'
 
 type PromiseResolve = (value: Response | PromiseLike<Response>) => void
 type PromiseReject = (reason?: any) => void

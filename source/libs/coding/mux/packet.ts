@@ -1,5 +1,5 @@
-import * as Storage from '@ritaj/storage'
-import * as Event from '@ritaj/event'
+import * as Storage from '../storage/index.ts'
+import * as Event from '../event/index.ts'
 
 import type { Attribution } from './authentication.ts'
 import { Caller } from './caller.ts'
@@ -9,23 +9,23 @@ import { INSPECT, Secrets } from './secrets.ts'
 type Constructor<T = any> = new (...args: any[]) => T
 
 export class Receiver {
-  readonly OnReceving = new Event.Delegate<[Packet]>()
+  readonly OnReceving: Event.Delegate<[Packet]> = new Event.Delegate()
 
-  Accept = this.OnReceving.Invoke.bind(this.OnReceving)
+  Accept: (packet: Packet) => void = this.OnReceving.Invoke.bind(this.OnReceving)
 }
 
 export class Sender {
-  readonly OnSending = new Event.Delegate<[Packet]>()
+  readonly OnSending: Event.Delegate<[Packet]> = new Event.Delegate()
 
-  Send = this.OnSending.Invoke.bind(this.OnSending)
+  Send: (packet: Packet) => void = this.OnSending.Invoke.bind(this.OnSending)
 }
 
 export class Duplex implements Receiver, Sender {
-  readonly OnReceving = new Event.Delegate<[packet: Packet]>()
-  readonly OnSending = new Event.Delegate<[packet: Packet]>()
+  readonly OnReceving: Event.Delegate<[packet: Packet]> = new Event.Delegate()
+  readonly OnSending: Event.Delegate<[packet: Packet]> = new Event.Delegate()
 
-  Accept = this.OnReceving.Invoke.bind(this.OnReceving)
-  Send = this.OnSending.Invoke.bind(this.OnSending)
+  Accept: (packet: Packet) => void = this.OnReceving.Invoke.bind(this.OnReceving)
+  Send: (packet: Packet) => void = this.OnSending.Invoke.bind(this.OnSending)
 }
 
 /**
@@ -35,29 +35,29 @@ export class Duplex implements Receiver, Sender {
  * @todo How to make it more distinct?
  */
 export class HalfDuplex implements Receiver, Sender {
-  readonly OnReceving = new Event.Delegate<[packet: Packet]>()
-  readonly OnSending = new Event.Delegate<[packet: Packet]>()
+  readonly OnReceving: Event.Delegate<[packet: Packet]> = new Event.Delegate()
+  readonly OnSending: Event.Delegate<[packet: Packet]> = new Event.Delegate()
   
-  Accept = this.OnReceving.Invoke.bind(this.OnReceving)
-  Send = this.OnSending.Invoke.bind(this.OnSending)
+  Accept: (packet: Packet) => void = this.OnReceving.Invoke.bind(this.OnReceving)
+  Send: (packet: Packet) => void = this.OnSending.Invoke.bind(this.OnSending)
 }
 
 export class Packet implements Storage.Storable {
-  protected readonly c = new Storage.Codec()
+  protected readonly c: Storage.Codec = new Storage.Codec()
   /** Declares fields that travel but are never shown in logs: see Secrets. */
-  protected readonly secret = new Secrets(this.c)
-  Dump = this.c.Dump
-  Restore = this.c.Restore
+  protected readonly secret: Secrets = new Secrets(this.c)
+  Dump: (storage: Storage.SerialStorage) => void = this.c.Dump
+  Restore: (storage: Storage.SerialStorage) => void = this.c.Restore
 
   // Not codec-backed on purpose: see Caller and Credential.
   private from = Caller.Anonymous
   private credential: Credential | undefined
 
-  static readonly Registry = new Storage.Registry<Packet>(
+  static readonly Registry: Storage.Registry<Packet> = new Storage.Registry<Packet>(
     new Map([[Packet, '/mux.packet']]),
   )
 
-  static Register(c: Constructor<Packet>, t: string) {
+  static Register(c: Constructor<Packet>, t: string): Storage.Registry<Packet> {
     const self = this.Registry.ReadConstructor(this)
     this.Registry.Register(c, self + t)
     return this.Registry
@@ -104,7 +104,7 @@ export class Packet implements Storage.Storable {
     return JSON.stringify(this.toJSON())
   }
 
-  [INSPECT[1]]() {
+  [INSPECT[1]](): { type: string; data: Record<string, unknown> } {
     return this.toJSON()
   }
 
@@ -112,7 +112,7 @@ export class Packet implements Storage.Storable {
     s.Send(this)
   }
 
-  static Load(serialized: string) {
+  static Load(serialized: string): Packet {
     const sheet = Storage.Json.Parse(serialized)
 
     return this.Registry.Restore(sheet)

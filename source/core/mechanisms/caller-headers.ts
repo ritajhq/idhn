@@ -1,4 +1,4 @@
-import * as MUX from '@ritaj/mux'
+import * as MUX from '@ritaj/coding/mux'
 
 const PREFIX = 'x-idhn-'
 const SUBJECT = `${PREFIX}subject`

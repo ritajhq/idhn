@@ -1,9 +1,11 @@
 {
   "name": "@idhn/mechanisms",
+  "version": null,
+  "license": "MIT",
   "exports": "./index.ts",
   "imports": {
-    "@ritaj/mux": "jsr:@ritaj/mux",
-    "@std/assert": "jsr:@std/assert@1.0.14"
+    "@std/assert": "jsr:@std/assert@1.0.14",
+    "@ritaj/coding": "jsr:@ritaj/coding"
   },
   "fmt": {
     "semiColons": false,

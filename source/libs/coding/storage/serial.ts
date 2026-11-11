@@ -74,7 +74,7 @@ export class Json implements SerialStorage {
     return JSON.stringify(this.root)
   }
 
-  Debug() {
+  Debug(): { cursor: unknown; root: string } {
     return {
       cursor: this.cursor,
       root: JSON.stringify(this.Node),
@@ -101,7 +101,7 @@ export class Json implements SerialStorage {
 export class Registry<T extends Storable = Storable> {
   private readonly restores = new Map<string, Restorer<T>>()
 
-  constructor(private readonly types = new Map<Function, string>()) {}
+  constructor(private readonly types: Map<Function, string> = new Map<Function, string>()) {}
 
   Dump(storage: SerialStorage, item: T): void {
     const type = this.types.get(item.constructor)

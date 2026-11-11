@@ -1,4 +1,4 @@
-import * as Horizon from '@ritaj/horizon'
+import * as Horizon from '@ritaj/coding/horizon'
 import type { Rejected } from './faults.ts'
 
 /** Which trails to look at, beside when. */

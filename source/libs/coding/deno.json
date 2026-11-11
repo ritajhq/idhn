@@ -1,0 +1,20 @@
+{
+  "name": "@ritaj/coding",
+  "version": "0.0.1",
+  "license": "MIT",
+  "exports": {
+    "./event": "./event/index.ts",
+    "./storage": "./storage/index.ts",
+    "./mux": "./mux/index.ts",
+    "./mux/client/http": "./mux/clients/http.ts",
+    "./mux/client/ws": "./mux/clients/ws.ts",
+    "./mux/server/http": "./mux/servers/http.ts",
+    "./mux/server/ws": "./mux/servers/ws.ts",
+    "./mux/server/lambda": "./mux/servers/lambda.ts",
+    "./horizon": "./horizon/index.ts"
+  },
+  "imports": {
+    "aws-lambda": "npm:@types/aws-lambda@8.10.160",
+    "@std/assert": "jsr:@std/assert@1.0.14"
+  }
+}

@@ -1,4 +1,4 @@
-import * as Horizon from '@ritaj/horizon'
+import * as Horizon from '@ritaj/coding/horizon'
 import { Change } from './change.ts'
 
 export interface LookupView {

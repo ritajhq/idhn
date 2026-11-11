@@ -15,3 +15,15 @@ build:
     kit: deno.bundle
   console/web:
     kit: react
+
+publish:
+  core:
+    - name: mechanisms
+      package: "@idhn/mechanisms"
+      publish:
+        - kit: jsr
+  libs:
+    - name: coding
+      package: "@ritaj/coding"
+      publish:
+        - kit: jsr

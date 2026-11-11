@@ -1,6 +1,6 @@
-import type * as MUX from '@ritaj/mux'
+import type * as MUX from '../mux/index.ts'
 
-import * as Event from '@ritaj/event'
+import * as Event from '../event/index.ts'
 
 import type {
   AsyncResolver,
@@ -16,8 +16,8 @@ import { Crashed, Fault, Undelivered } from './fault.ts'
 type ReturnedConstructor = new (packet: MUX.Packet) => MUX.Returned
 
 export class Server {
-  readonly OnResolved = new Event.Delegate<[Query<any, any> | AsyncQuery<any, any>]>()
-  readonly OnHandled = new Event.Delegate<[Action<any, any>]>()
+  readonly OnResolved: Event.Delegate<[Query<any, any> | AsyncQuery<any, any>]> = new Event.Delegate()
+  readonly OnHandled: Event.Delegate<[Action<any, any>]> = new Event.Delegate()
 
   private readonly returned = new Event.Delegate<[MUX.Returned]>()
   private readonly crashed = new Event.Delegate<[message: Message<any, any>, error: unknown, incident: string]>()

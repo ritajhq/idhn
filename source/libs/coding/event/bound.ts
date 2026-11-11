@@ -5,7 +5,7 @@ export function Bounded(
   _target: any,
   propertyKey: string,
   descriptor: PropertyDescriptor,
-) {
+): PropertyDescriptor {
   const originalMethod = descriptor.value
   return {
     configurable: true,
@@ -33,7 +33,7 @@ export function Bounded(
 export function Bound<This, Args extends any[], Return>(
   _: (this: This, ...args: Args) => Return,
   context: ClassMethodDecoratorContext<any>,
-) {
+): void {
   context.addInitializer(function () {
     this[context.name] = this[context.name].bind(this)
   })

@@ -1,8 +1,8 @@
 import * as Authoring from '@idhn/authoring'
 import * as Contract from '@idhn/contract'
 import type * as Resources from '@idhn/resources'
-import type * as Horizon from '@ritaj/horizon'
-import * as MUX from '@ritaj/mux'
+import type * as Horizon from '@ritaj/coding/horizon'
+import * as MUX from '@ritaj/coding/mux'
 import { refusing } from './rejections.ts'
 import { draftView, resourceView, revisionView } from './views.ts'
 

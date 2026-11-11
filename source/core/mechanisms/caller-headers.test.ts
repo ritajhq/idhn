@@ -1,7 +1,7 @@
 import { assertEquals } from '@std/assert'
 import * as Access from '@idhn/access'
 import * as Guard from '@idhn/guard'
-import * as MUX from '@ritaj/mux'
+import * as MUX from '@ritaj/coding/mux'
 import { CallerHeaders } from './caller-headers.ts'
 
 /** The envelope of a request as a guard forwards it for `identity`. */

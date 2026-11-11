@@ -1,6 +1,6 @@
 import { Primitive, type Value } from './primitive.ts'
 import { Json, type Data, type SerialStorage, type Storable } from './serial.ts'
-import * as Event from '@ritaj/event'
+import * as Event from '../event/index.ts'
 
 export class Codec implements Storable {
   private partitions = new Map<string, Storable>()
@@ -123,7 +123,7 @@ export class Codec implements Storable {
     return clone
   }
 
-  Dump = (storage: SerialStorage) => {
+  Dump = (storage: SerialStorage): void => {
     this.primitives.forEach((prm, key) => {
       storage.Write(key, prm.ToData())
     })
@@ -133,7 +133,7 @@ export class Codec implements Storable {
     })
   }
 
-  Restore = (storage: SerialStorage) => {
+  Restore = (storage: SerialStorage): void => {
     this.primitives.forEach((prm, key) => {
       prm.FromData(storage.Read(key, prm.ToData()))
     })
@@ -143,7 +143,7 @@ export class Codec implements Storable {
     })
   }
 
-  ToJSON = () => {
+  ToJSON = (): string => {
     const sheet = Json.Empty()
 
     this.Dump(sheet)
@@ -151,7 +151,7 @@ export class Codec implements Storable {
     return sheet.Serialized
   }
 
-  FromJSON = (json: string) => {
+  FromJSON = (json: string): void => {
     const sheet = Json.Parse(json)
 
     this.Restore(sheet)

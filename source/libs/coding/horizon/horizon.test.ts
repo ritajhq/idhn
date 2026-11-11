@@ -1,12 +1,12 @@
 import { assert, assertEquals, assertInstanceOf, assertRejects } from '@std/assert'
 
-import * as MUX from '@ritaj/mux'
-import { Client as HttpCourier } from '@ritaj/mux/client/http'
-import { Server as HttpTransport } from '@ritaj/mux/server/http'
-import { Client as WsCourier } from '@ritaj/mux/client/ws'
-import { Server as WsTransport } from '@ritaj/mux/server/ws'
+import * as MUX from '../mux/index.ts'
+import { Client as HttpCourier } from '../mux/clients/http.ts'
+import { Server as HttpTransport } from '../mux/servers/http.ts'
+import { Client as WsCourier } from '../mux/clients/ws.ts'
+import { Server as WsTransport } from '../mux/servers/ws.ts'
 
-import * as Storage from '@ritaj/storage'
+import * as Storage from '../storage/index.ts'
 
 import * as Horizon from './index.ts'
 

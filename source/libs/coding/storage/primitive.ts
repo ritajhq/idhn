@@ -1,5 +1,5 @@
 import type { Data } from './serial.ts'
-import * as Event from '@ritaj/event'
+import * as Event from '../event/index.ts'
 
 export class Primitive<T> {
   static Undefined(): Primitive<undefined> {
@@ -52,7 +52,7 @@ export class Primitive<T> {
     return new Primitive(value, DateCodec)
   }
 
-  readonly OnChange = new Event.Delegate<[T, T]>()
+  readonly OnChange: Event.Delegate<[T, T]> = new Event.Delegate<[T, T]>()
 
   protected constructor(
     private value: T,

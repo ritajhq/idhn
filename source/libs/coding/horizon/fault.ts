@@ -1,5 +1,5 @@
-import * as MUX from '@ritaj/mux'
-import * as Storage from '@ritaj/storage'
+import * as MUX from '../mux/index.ts'
+import * as Storage from '../storage/index.ts'
 
 type Constructor<T> = new (...args: any[]) => T
 
@@ -19,12 +19,12 @@ type Constructor<T> = new (...args: any[]) => T
  * names `Error` doesn't already use (`name`, `message`, `stack`, `cause`).
  */
 export class Fault extends Error implements Storage.Storable {
-  protected readonly c = new Storage.Codec()
+  protected readonly c: Storage.Codec = new Storage.Codec()
   /** Declares fields that travel but are never shown in logs: see MUX.Secrets. */
-  protected readonly secret = new MUX.Secrets(this.c)
+  protected readonly secret: MUX.Secrets = new MUX.Secrets(this.c)
   private readonly text = this.c.String('', 'fault.message')
 
-  static readonly Registry = new Storage.Registry<Fault>(new Map([[Fault, '/horizon.fault']]))
+  static readonly Registry: Storage.Registry<Fault> = new Storage.Registry<Fault>(new Map([[Fault, '/horizon.fault']]))
 
   constructor(message = '') {
     super(message)
@@ -32,7 +32,7 @@ export class Fault extends Error implements Storage.Storable {
     this.text.Write(message)
   }
 
-  static Register(c: Constructor<Fault>, t: string) {
+  static Register(c: Constructor<Fault>, t: string): Storage.Registry<Fault> {
     const self = Fault.Registry.ReadConstructor(this)
     Fault.Registry.Register(c, self + t)
     return Fault.Registry

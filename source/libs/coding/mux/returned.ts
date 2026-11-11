@@ -1,4 +1,4 @@
-import * as Storage from '@ritaj/storage'
+import * as Storage from '../storage/index.ts'
 
 import { Packet } from './packet.ts'
 

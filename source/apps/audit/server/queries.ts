@@ -1,6 +1,6 @@
 import * as Audit from '@idhn/audit'
 import * as Contract from '@idhn/contract'
-import type * as Horizon from '@ritaj/horizon'
+import type * as Horizon from '@ritaj/coding/horizon'
 
 /** Answers the console's audit queries from the store. */
 export class Queries {

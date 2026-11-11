@@ -2,9 +2,9 @@ import type { AsyncOptions, DataStructure, Message } from './concepts.ts'
 import { Action, AsyncQuery, AsyncStatus, Query } from './concepts.ts'
 import { Crashed, Fault, type ProtocolFault, TimedOut, Undelivered } from './fault.ts'
 
-import * as MUX from '@ritaj/mux'
+import * as MUX from '../mux/index.ts'
 
-import * as Event from '@ritaj/event'
+import * as Event from '../event/index.ts'
 
 type PromiseResolver<T> = (value: T | PromiseLike<T>) => void
 type Timer = ReturnType<typeof setTimeout>

@@ -3,15 +3,15 @@ import type { Credential } from '../credential.ts'
 import { Packet } from '../packet.ts'
 import { Presentation } from '../presentation.ts'
 
-import * as Storage from '@ritaj/storage'
-import * as Event from '@ritaj/event'
+import * as Storage from '../../storage/index.ts'
+import * as Event from '../../event/index.ts'
 
 const RECONNECT_DELAY_MS = 3_000
 
 export class Client extends Courier {
-  readonly OnError = new Event.Delegate<[error: unknown]>()
-  readonly OnConnect = new Event.Delegate<[]>()
-  readonly OnDisconnect = new Event.Delegate<[]>()
+  readonly OnError: Event.Delegate<[error: unknown]> = new Event.Delegate()
+  readonly OnConnect: Event.Delegate<[]> = new Event.Delegate()
+  readonly OnDisconnect: Event.Delegate<[]> = new Event.Delegate()
 
   private socket: WebSocket
   private pending: string[] = []

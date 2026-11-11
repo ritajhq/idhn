@@ -1,4 +1,4 @@
-import * as Event from '@ritaj/event'
+import * as Event from '../event/index.ts'
 
 import type { Credential } from './credential.ts'
 import { Envelope } from './envelope.ts'

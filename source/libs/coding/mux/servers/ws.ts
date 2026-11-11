@@ -4,8 +4,8 @@ import { Duplex, Packet } from '../packet.ts'
 import { Presentation } from '../presentation.ts'
 import { Returned, Unauthenticated } from '../returned.ts'
 
-import * as Storage from '@ritaj/storage'
-import * as Event from '@ritaj/event'
+import * as Storage from '../../storage/index.ts'
+import * as Event from '../../event/index.ts'
 
 export interface Socket {
   readonly readyState: number
@@ -80,8 +80,8 @@ class Connection {
 }
 
 export class Server extends Duplex {
-  readonly OnConnect = new Event.Delegate<[Socket]>()
-  readonly OnDisconnect = new Event.Delegate<[Socket]>()
+  readonly OnConnect: Event.Delegate<[Socket]> = new Event.Delegate()
+  readonly OnDisconnect: Event.Delegate<[Socket]> = new Event.Delegate()
 
   private readonly connections = new Map<Socket, Connection>()
   private readonly alive = new WeakMap<Socket, boolean>()

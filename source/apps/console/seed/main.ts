@@ -24,9 +24,9 @@
 import { parse as parseYaml } from '@std/yaml'
 import { resolve, toFileUrl } from '@std/path'
 import * as Contract from '@idhn/contract'
-import * as Horizon from '@ritaj/horizon'
-import * as MUX from '@ritaj/mux'
-import { Client as HttpCourier } from '@ritaj/mux/client/http'
+import * as Horizon from '@ritaj/coding/horizon'
+import * as MUX from '@ritaj/coding/mux'
+import { Client as HttpCourier } from '@ritaj/coding/mux/client/http'
 
 const TEST_SUFFIX = '_test.rego'
 

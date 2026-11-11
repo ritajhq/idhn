@@ -1,4 +1,4 @@
-import * as Storage from '@ritaj/storage'
+import * as Storage from '../storage/index.ts'
 
 /** What a secret field shows wherever something is written out for a person or a log. */
 export const HIDDEN = '[secret]'
@@ -49,4 +49,6 @@ export class Secrets {
 }
 
 /** The inspection hooks Deno and Node call for `console.log`, so logging an object shows what `toJSON` does. */
-export const INSPECT = [Symbol.for('Deno.customInspect'), Symbol.for('nodejs.util.inspect.custom')] as const
+const DENO_INSPECT: unique symbol = Symbol.for('Deno.customInspect')
+const NODE_INSPECT: unique symbol = Symbol.for('nodejs.util.inspect.custom')
+export const INSPECT: readonly [typeof DENO_INSPECT, typeof NODE_INSPECT] = [DENO_INSPECT, NODE_INSPECT]

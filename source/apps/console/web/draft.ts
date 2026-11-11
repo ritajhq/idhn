@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import * as Contract from '@idhn/contract'
-import type * as Horizon from '@ritaj/horizon'
+import type * as Horizon from '@ritaj/coding/horizon'
 import { Describe } from './console.ts'
 import { useConsole } from './console-provider.tsx'
 

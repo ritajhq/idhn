@@ -1,4 +1,4 @@
-import type { Server as HttpTransport } from '@ritaj/mux/server/http'
+import type { Server as HttpTransport } from '@ritaj/coding/mux/server/http'
 import type { Intake } from './intake.ts'
 
 /**

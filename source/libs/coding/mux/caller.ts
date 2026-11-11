@@ -19,9 +19,9 @@ export type CallerStatus = 'authenticated' | 'anonymous' | 'invalid' | 'unavaila
  * by whoever receives it next, not by this hop.
  */
 export class Caller {
-  static readonly Anonymous = new Caller('anonymous', undefined, undefined, Object.freeze({}))
-  static readonly Invalid = new Caller('invalid', undefined, undefined, Object.freeze({}))
-  static readonly Unavailable = new Caller('unavailable', undefined, undefined, Object.freeze({}))
+  static readonly Anonymous: Caller = new Caller('anonymous', undefined, undefined, Object.freeze({}))
+  static readonly Invalid: Caller = new Caller('invalid', undefined, undefined, Object.freeze({}))
+  static readonly Unavailable: Caller = new Caller('unavailable', undefined, undefined, Object.freeze({}))
 
   private constructor(
     readonly Status: CallerStatus,

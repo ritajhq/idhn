@@ -1,4 +1,4 @@
-import * as Horizon from '@ritaj/horizon'
+import * as Horizon from '@ritaj/coding/horizon'
 import type { Rejected } from './faults.ts'
 
 /** One action of a resource, by the name judges know it by. */

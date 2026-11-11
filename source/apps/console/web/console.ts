@@ -1,8 +1,8 @@
 import * as Contract from '@idhn/contract'
-import type * as Event from '@ritaj/event'
-import * as Horizon from '@ritaj/horizon'
-import * as MUX from '@ritaj/mux'
-import { Client as HttpCourier } from '@ritaj/mux/client/http'
+import type * as Event from '@ritaj/coding/event'
+import * as Horizon from '@ritaj/coding/horizon'
+import * as MUX from '@ritaj/coding/mux'
+import { Client as HttpCourier } from '@ritaj/coding/mux/client/http'
 
 /** How long the browser waits for a call: publishing waits for the builder to check, test and compile. */
 const CALL_TIMEOUT_MS = 90_000

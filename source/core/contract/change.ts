@@ -1,4 +1,4 @@
-import * as Horizon from '@ritaj/horizon'
+import * as Horizon from '@ritaj/coding/horizon'
 import type { DraftView } from './policies.ts'
 import type { Rejected, Stale } from './faults.ts'
 

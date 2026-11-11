@@ -1,4 +1,4 @@
-import * as Horizon from '@ritaj/horizon'
+import * as Horizon from '@ritaj/coding/horizon'
 
 /** Why a call was refused, for the caller to act on. */
 export type Reason =
