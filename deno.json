@@ -8,6 +8,7 @@
   "nodeModulesDir": "auto",
   "imports": {
     "@ensemble/kit-sdk": "./.ensemble/repository/source/core/kit-sdk/index.ts",
-    "@ensemble/core": "./.ensemble/repository/source/core/core/index.ts"
+    "@ensemble/core": "./.ensemble/repository/source/core/core/index.ts",
+    "@std/fs": "jsr:@std/fs@1.0.24"
   }
 }
