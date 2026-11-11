@@ -1,0 +1,3 @@
+source/libs/coding:
+  repo: 'git@github.com:ritajhq/coding.git'
+  ref: 054e60d89bf81ad683dc952d8f1e762dc3083fe0
