@@ -4,7 +4,7 @@
   "imports": {
     "@std/path": "jsr:@std/path@1.1.6",
     "@std/yaml": "jsr:@std/yaml@1.1.2",
-    "@ritaj/coding": "jsr:@ritaj/coding"
+    "@ritaj/coding": "jsr:@ritaj/coding@^0.0.1"
   },
   "fmt": {
     "semiColons": false,

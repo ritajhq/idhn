@@ -5,7 +5,7 @@
   "exports": "./index.ts",
   "imports": {
     "@std/assert": "jsr:@std/assert@1.0.14",
-    "@ritaj/coding": "jsr:@ritaj/coding"
+    "@ritaj/coding": "jsr:@ritaj/coding@^0.0.1"
   },
   "fmt": {
     "semiColons": false,

@@ -1273,21 +1273,21 @@
       "source/apps/audit/server": {
         "dependencies": [
           "jsr:@duesabati/evento@1",
-          "jsr:@ritaj/coding@*",
+          "jsr:@ritaj/coding@^0.0.1",
           "jsr:@std/assert@1.0.14",
           "jsr:@std/path@1.1.6"
         ]
       },
       "source/apps/console/seed": {
         "dependencies": [
-          "jsr:@ritaj/coding@*",
+          "jsr:@ritaj/coding@^0.0.1",
           "jsr:@std/path@1.1.6",
           "jsr:@std/yaml@1.1.2"
         ]
       },
       "source/apps/console/server": {
         "dependencies": [
-          "jsr:@ritaj/coding@*",
+          "jsr:@ritaj/coding@^0.0.1",
           "jsr:@std/assert@1.0.14",
           "jsr:@std/path@1.1.6",
           "jsr:@std/yaml@1.1.2"
@@ -1348,7 +1348,7 @@
       },
       "source/core/contract": {
         "dependencies": [
-          "jsr:@ritaj/coding@*",
+          "jsr:@ritaj/coding@^0.0.1",
           "jsr:@std/assert@1.0.14"
         ]
       },
@@ -1381,7 +1381,7 @@
       },
       "source/core/mechanisms": {
         "dependencies": [
-          "jsr:@ritaj/coding@*",
+          "jsr:@ritaj/coding@^0.0.1",
           "jsr:@std/assert@1.0.14"
         ]
       },
